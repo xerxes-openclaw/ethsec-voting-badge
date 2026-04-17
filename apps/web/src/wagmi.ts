@@ -1,6 +1,6 @@
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { mainnet, sepolia } from "wagmi/chains";
-import type { Chain } from "viem";
+import { http, type Chain } from "viem";
 import { APP_CONFIG } from "./config.js";
 
 const SUPPORTED: Record<number, Chain> = {
@@ -16,4 +16,9 @@ export const wagmiConfig = getDefaultConfig({
   // but WalletConnect QR won't show unless a real one is provided.
   projectId: APP_CONFIG.walletConnectProjectId || "PLACEHOLDER",
   chains: [expectedChain],
+  // When VITE_RPC_URL is set, override the default transport so our log-scan
+  // hook doesn't get capped at 1000 blocks by random thirdweb/Infura RPCs.
+  ...(APP_CONFIG.rpcUrl
+    ? { transports: { [expectedChain.id]: http(APP_CONFIG.rpcUrl) } }
+    : {}),
 });

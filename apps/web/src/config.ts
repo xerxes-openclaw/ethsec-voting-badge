@@ -28,6 +28,8 @@ if (!/^0x[a-f0-9]{40}$/.test(badgeContract)) {
 
 const walletConnectProjectId = (env.VITE_WALLETCONNECT_PROJECT_ID ?? "") as string;
 
+const rpcUrl = (env.VITE_RPC_URL ?? "") as string;
+
 /** Localtunnel hosts demand a `bypass-tunnel-reminder` header on every request. */
 export const isTunnelHost = (url: string): boolean => /\.loca\.lt$/i.test(new URL(url).hostname);
 
@@ -36,6 +38,7 @@ export const APP_CONFIG = {
   chainId,
   badgeContract,
   walletConnectProjectId,
+  rpcUrl,
   isTunnel: isTunnelHost(apiBaseUrl),
 } as const;
 
