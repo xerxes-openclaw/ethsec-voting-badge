@@ -1,6 +1,5 @@
-import { createConfig, http } from "wagmi";
+import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { mainnet, sepolia } from "wagmi/chains";
-import { injected, walletConnect } from "wagmi/connectors";
 import type { Chain } from "viem";
 import { APP_CONFIG } from "./config.js";
 
@@ -9,30 +8,12 @@ const SUPPORTED: Record<number, Chain> = {
   [sepolia.id]: sepolia,
 };
 
-const chain: Chain = SUPPORTED[APP_CONFIG.chainId] ?? mainnet;
+export const expectedChain: Chain = SUPPORTED[APP_CONFIG.chainId] ?? mainnet;
 
-const connectors = [
-  injected({ shimDisconnect: true }),
-  ...(APP_CONFIG.walletConnectProjectId
-    ? [
-        walletConnect({
-          projectId: APP_CONFIG.walletConnectProjectId,
-          showQrModal: true,
-          metadata: {
-            name: "ETHSecurity Voting Badge",
-            description: "Submit a private voting address tied to your ETHSecurity Badge.",
-            url: typeof window !== "undefined" ? window.location.origin : "https://ethsec.local",
-            icons: [],
-          },
-        }),
-      ]
-    : []),
-];
-
-export const wagmiConfig = createConfig({
-  chains: [chain],
-  connectors,
-  transports: { [chain.id]: http() },
+export const wagmiConfig = getDefaultConfig({
+  appName: "ETHSecurity Voting Badge",
+  // WalletConnect project ID — injected wallets work without it,
+  // but WalletConnect QR won't show unless a real one is provided.
+  projectId: APP_CONFIG.walletConnectProjectId || "PLACEHOLDER",
+  chains: [expectedChain],
 });
-
-export const expectedChain = chain;

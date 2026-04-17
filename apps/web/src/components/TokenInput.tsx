@@ -32,19 +32,19 @@ export function TokenInput({ onSubmit, disabled }: Props): JSX.Element {
   };
 
   return (
-    <section className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-4">
-      <header>
-        <h2 className="font-tight text-xl">Cast your voting address</h2>
-        <p className="text-sm text-white/60">
-          Enter the tokenId of your ETHSecurity badge and the address you want
-          to delegate your voting power to. Your address is encrypted in the
-          browser before it leaves your machine.
+    <section className="animate-scaleIn rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-sm p-6 sm:p-8 space-y-6">
+      <header className="space-y-1">
+        <h2 className="font-tight text-xl sm:text-2xl">Cast your voting address</h2>
+        <p className="text-sm text-white/50 leading-relaxed">
+          Enter your badge token ID and the address you want to delegate
+          your voting power to. Everything is encrypted in-browser.
         </p>
       </header>
-      <form onSubmit={submit} className="space-y-4">
-        <div className="space-y-1">
-          <label htmlFor="tokenId" className="text-xs text-white/60">
-            Badge token ID
+
+      <form onSubmit={submit} className="space-y-5">
+        <div className="space-y-2">
+          <label htmlFor="tokenId" className="block text-xs font-medium text-white/60 uppercase tracking-wider">
+            Badge Token ID
           </label>
           <input
             id="tokenId"
@@ -53,33 +53,41 @@ export function TokenInput({ onSubmit, disabled }: Props): JSX.Element {
             disabled={disabled}
             placeholder="e.g. 42"
             inputMode="numeric"
-            className="w-full rounded-lg bg-black/40 border border-white/10 focus:border-brand-blue-500 px-3 py-2 text-sm font-mono outline-none disabled:opacity-50"
+            autoComplete="off"
+            className="w-full rounded-xl bg-black/30 border border-white/10 focus:border-brand-blue-500 focus:ring-1 focus:ring-brand-blue-500/40 px-4 py-3 text-base font-mono placeholder:text-white/20 outline-none transition-all duration-200 disabled:opacity-40"
           />
         </div>
-        <div className="space-y-1">
-          <label htmlFor="votingAddress" className="text-xs text-white/60">
-            Voting address (where your vote weight goes)
+
+        <div className="space-y-2">
+          <label htmlFor="votingAddress" className="block text-xs font-medium text-white/60 uppercase tracking-wider">
+            Voting Address
           </label>
           <input
             id="votingAddress"
             value={votingAddress}
             onChange={(e) => setVotingAddress(e.target.value)}
             disabled={disabled}
-            placeholder="0x…"
-            className="w-full rounded-lg bg-black/40 border border-white/10 focus:border-brand-blue-500 px-3 py-2 text-sm font-mono outline-none disabled:opacity-50"
+            placeholder="0x..."
+            autoComplete="off"
+            className="w-full rounded-xl bg-black/30 border border-white/10 focus:border-brand-blue-500 focus:ring-1 focus:ring-brand-blue-500/40 px-4 py-3 text-base font-mono placeholder:text-white/20 outline-none transition-all duration-200 disabled:opacity-40"
           />
+          <p className="text-xs text-white/30">Where your vote weight goes</p>
         </div>
+
         {err && (
-          <p role="alert" className="text-sm text-brand-red-500">
-            {err}
-          </p>
+          <div className="animate-fadeIn rounded-lg bg-brand-red-500/10 border border-brand-red-500/30 px-4 py-2.5">
+            <p role="alert" className="text-sm text-brand-red-500">
+              {err}
+            </p>
+          </div>
         )}
+
         <button
           type="submit"
           disabled={disabled}
-          className="rounded-lg bg-brand-green-500 hover:bg-brand-green-500/80 disabled:opacity-50 px-4 py-2 text-sm font-medium transition-colors"
+          className="w-full rounded-xl bg-brand-green-500 hover:bg-brand-green-500/85 active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100 px-5 py-3.5 text-sm font-semibold tracking-wide transition-all duration-200"
         >
-          Encrypt &amp; sign
+          Encrypt &amp; Sign
         </button>
       </form>
     </section>
