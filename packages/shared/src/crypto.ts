@@ -9,9 +9,20 @@ import { encodeBundle, decodeBundle, type Bundle } from "./bundle.js";
 const HKDF_SALT = utf8ToBytes("ethsec-voting-badge-v1");
 const HKDF_INFO = utf8ToBytes("aes-256-gcm");
 
+// Browser-compatible base64 helpers (no Buffer dependency)
 const b64 = {
-  enc: (u: Uint8Array) => Buffer.from(u).toString("base64"),
-  dec: (s: string) => new Uint8Array(Buffer.from(s, "base64")),
+  enc: (u: Uint8Array): string => {
+    // Works in both Node (>=16 with btoa) and browsers
+    let bin = "";
+    for (const byte of u) bin += String.fromCharCode(byte);
+    return btoa(bin);
+  },
+  dec: (s: string): Uint8Array => {
+    const bin = atob(s);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  },
 };
 
 export function sha256Hex(data: string | Uint8Array): `0x${string}` {
