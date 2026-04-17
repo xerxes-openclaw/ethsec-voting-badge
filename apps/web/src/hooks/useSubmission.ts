@@ -11,19 +11,26 @@ import {
   reduce,
   type SubmissionState,
 } from "../state/submission.js";
-import { getConfig, getTokenStatus, postSubmit } from "../api.js";
+import { getConfig, getTokenStatus, postSubmit, type SubmitBody } from "../api.js";
+
+export type SubmitMode = "online" | "offline";
 
 /**
  * Orchestrator hook. Exposes the current state machine snapshot plus two
- * entry points: `start(tokenId, votingAddress)` kicks off load-config →
- * encrypt → sign → submit, and `reset()` returns to idle.
+ * entry points: `start(tokenId, votingAddress, mode)` kicks off load-config →
+ * encrypt → sign → submit (online) or → download blob (offline), and
+ * `reset()` returns to idle.
  *
  * Wallet connection is read from wagmi — callers should block on
  * `useAccount().status === "connected"` before calling `start`.
  */
 export function useSubmission(): {
   state: SubmissionState;
-  start: (tokenId: string, votingAddress: Address) => Promise<void>;
+  start: (
+    tokenId: string,
+    votingAddress: Address,
+    mode?: SubmitMode,
+  ) => Promise<void>;
   reset: () => void;
 } {
   const [state, dispatch] = useReducer(reduce, initialState);
@@ -38,7 +45,11 @@ export function useSubmission(): {
   }, []);
 
   const start = useCallback(
-    async (tokenId: string, votingAddress: Address) => {
+    async (
+      tokenId: string,
+      votingAddress: Address,
+      mode: SubmitMode = "online",
+    ) => {
       if (running.current) return;
       running.current = true;
       try {
@@ -46,7 +57,11 @@ export function useSubmission(): {
 
         dispatch({ type: "WALLET_READY" });
 
-        // 1) Load config + pre-check token usage
+        // 1) Load config. In offline mode, we still hit /config because the
+        // user is signing *in the hosted dApp* — they just skip the POST at
+        // the end. For a truly air-gapped build (static bundle on an
+        // offline machine), this module is bypassed entirely by the offline
+        // bundle wiring; see README.
         const config = await getConfig();
         const status = await getTokenStatus(tokenId);
         if (status.used) {
@@ -100,9 +115,7 @@ export function useSubmission(): {
         })) as Hex;
         dispatch({ type: "SIGNED", signature });
 
-        // 4) Submit
-        dispatch({ type: "SUBMITTING" });
-        const res = await postSubmit({
+        const body: SubmitBody = {
           badgeContract: config.badgeContract,
           tokenId,
           holderWallet: address,
@@ -112,7 +125,18 @@ export function useSubmission(): {
           issuedAt,
           expiresAt,
           signature,
-        });
+        };
+
+        if (mode === "offline") {
+          // 4b) Export blob for later submission from an online machine.
+          downloadJson(body, `ethsec-submission-badge-${tokenId}.json`);
+          dispatch({ type: "EXPORTED" });
+          return;
+        }
+
+        // 4a) Submit to server.
+        dispatch({ type: "SUBMITTING" });
+        const res = await postSubmit(body);
         dispatch({ type: "SUBMITTED", submittedAt: res.submittedAt });
       } catch (err) {
         const e = err as { code?: string; message?: string; shortMessage?: string };
@@ -146,4 +170,20 @@ function randomHex32(): `0x${string}` {
   let hex = "0x";
   for (const b of buf) hex += b.toString(16).padStart(2, "0");
   return hex as `0x${string}`;
+}
+
+function downloadJson(body: SubmitBody, filename: string): void {
+  const blob = new Blob([JSON.stringify(body, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Give the browser a tick before revoking; revoking synchronously
+  // cancels some downloads on Safari.
+  setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }

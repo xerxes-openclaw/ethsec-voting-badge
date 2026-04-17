@@ -4,19 +4,26 @@ import { WalletConnect } from "./components/WalletConnect.js";
 import { TokenInput } from "./components/TokenInput.js";
 import { Progress } from "./components/Progress.js";
 import { Submitted } from "./components/Submitted.js";
+import { Exported } from "./components/Exported.js";
 import { ErrorState } from "./components/ErrorState.js";
 import { AdminPage } from "./components/AdminPage.js";
+import { UploadBlob } from "./components/UploadBlob.js";
 import { useSubmission } from "./hooks/useSubmission.js";
 import { expectedChain } from "./wagmi.js";
 
+type View = "voter" | "admin" | "upload";
+
 export default function App(): JSX.Element {
-  const [view, setView] = useState<"voter" | "admin">("voter");
+  const [view, setView] = useState<View>("voter");
   const { address, status: accountStatus } = useAccount();
   const chainId = useChainId();
   const { state, start, reset } = useSubmission();
 
   if (view === "admin") {
     return <AdminPage onBack={() => setView("voter")} />;
+  }
+  if (view === "upload") {
+    return <UploadBlob onBack={() => setView("voter")} />;
   }
 
   const wrongChain = accountStatus === "connected" && chainId !== expectedChain.id;
@@ -73,6 +80,10 @@ export default function App(): JSX.Element {
               />
             )}
 
+            {state.status === "exported" && state.tokenId && (
+              <Exported tokenId={state.tokenId} onReset={reset} />
+            )}
+
             {state.status === "error" && state.error && (
               <ErrorState
                 code={state.error.code}
@@ -86,12 +97,21 @@ export default function App(): JSX.Element {
         {/* Footer */}
         <footer className="text-center text-xs text-white/30 pt-6 space-y-2">
           <p>ETHSecurity Voting Badge &middot; DAO.fund</p>
-          <button
-            onClick={() => setView("admin")}
-            className="text-white/20 hover:text-white/40 text-xs transition-colors"
-          >
-            Admin
-          </button>
+          <div className="flex justify-center gap-4">
+            <button
+              onClick={() => setView("upload")}
+              className="text-white/20 hover:text-white/40 transition-colors"
+            >
+              Upload signed blob
+            </button>
+            <span className="text-white/10">&middot;</span>
+            <button
+              onClick={() => setView("admin")}
+              className="text-white/20 hover:text-white/40 transition-colors"
+            >
+              Admin
+            </button>
+          </div>
         </footer>
       </div>
     </main>
