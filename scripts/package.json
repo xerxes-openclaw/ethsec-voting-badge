@@ -3,12 +3,20 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "keygen": "tsx ./generate-keypair.ts"
+    "keygen": "tsx ./generate-keypair.ts",
+    "decrypt": "tsx ./decrypt-export.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ethsec/shared": "workspace:*",
     "@noble/post-quantum": "^0.2.1",
     "@noble/hashes": "^1.5.0",
     "tsx": "^4.16.0"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^20.11.0"
   }
 }
