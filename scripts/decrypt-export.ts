@@ -68,7 +68,10 @@ function main(): void {
 
   // Parse input CSV
   const raw = readFileSync(input, "utf8").trimEnd();
-  const [headerLine, ...rows] = raw.split("\n");
+  const lines = raw.split("\n");
+  const headerLine = lines[0];
+  if (!headerLine) throw new Error("Input CSV is empty");
+  const rows = lines.slice(1);
   const headers = splitCsvLine(headerLine);
 
   const ctIdx = headers.indexOf("ciphertext");
@@ -86,10 +89,10 @@ function main(): void {
   for (const row of rows) {
     if (!row.trim()) continue;
     const cols = splitCsvLine(row);
-    const ct = cols[ctIdx];
-    const tokenId = tokenIdIdx >= 0 ? cols[tokenIdIdx] : "";
-    const holderWallet = holderIdx >= 0 ? cols[holderIdx] : "";
-    const submittedAt = submittedIdx >= 0 ? cols[submittedIdx] : "";
+    const ct = cols[ctIdx] ?? "";
+    const tokenId = (tokenIdIdx >= 0 ? cols[tokenIdIdx] : "") ?? "";
+    const holderWallet = (holderIdx >= 0 ? cols[holderIdx] : "") ?? "";
+    const submittedAt = (submittedIdx >= 0 ? cols[submittedIdx] : "") ?? "";
 
     try {
       const pt = decryptBundle(ct, secretKey) as {
