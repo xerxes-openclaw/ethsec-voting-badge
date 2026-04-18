@@ -12,6 +12,7 @@ import {
   encryptPayload,
 } from "@ethsec/shared";
 import { WalletConnect } from "./WalletConnect.js";
+import { Decor } from "./Decor.js";
 import { APP_CONFIG } from "../config.js";
 import { getConfig, postSubmit, type SubmitBody, type SubmitOk } from "../api.js";
 
@@ -279,18 +280,30 @@ pnpm --filter @ethsec/scripts sign-offline --in payload.json --out sig.txt
   }, [prep]);
 
   return (
-    <main className="min-h-screen flex flex-col items-center px-4 py-8 sm:py-14">
-      <div className="w-full max-w-2xl space-y-6">
+    <section className="relative min-h-screen overflow-hidden pt-16 pb-24">
+      <Decor />
+
+      <div className="relative z-10 w-full max-w-2xl mx-auto px-4 space-y-6">
         {/* Header */}
-        <header className="space-y-3 text-center">
-          <div className="inline-flex items-center gap-2 rounded-full bg-brand-red-500/15 px-3 py-1 text-xs font-medium text-brand-red-500 ring-1 ring-brand-red-500/30">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand-red-500 animate-pulse" />
+        <header className="space-y-4 text-center animate-fadeIn">
+          <div className="flex justify-center">
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              src="/eth-security-badge.mp4"
+              className="w-32 h-32 rounded-full shadow-xl shadow-dao-red/15"
+            />
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full bg-dao-red/15 px-3 py-1 text-xs font-semibold tracking-wider uppercase text-dao-red ring-1 ring-dao-red/30">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-dao-red animate-pulse" />
             Offline mode
           </div>
-          <h1 className="font-tight text-3xl sm:text-4xl tracking-tight leading-tight">
+          <h1 className="font-tight text-4xl sm:text-5xl font-semibold tracking-tight leading-tight">
             Offline signing
           </h1>
-          <p className="text-white/60 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
+          <p className="text-gray-300 text-base sm:text-lg max-w-lg mx-auto leading-relaxed">
             For badge holders whose signing keys live on an airgapped machine. Sign the
             voting message locally, export the signed blob, then come back online to
             submit. No private key ever crosses the air gap.
@@ -556,13 +569,13 @@ npx --yes http-server apps/web/dist -p 5174`}</pre>
           <button
             type="button"
             onClick={onBack}
-            className="text-sm text-white/50 hover:text-white/80 transition-colors"
+            className="text-sm text-white/50 hover:text-dao-green transition-colors"
           >
             ← Back to mode select
           </button>
         </footer>
       </div>
-    </main>
+    </section>
   );
 }
 

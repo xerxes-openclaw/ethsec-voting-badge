@@ -2,6 +2,7 @@ import { useState } from "react";
 import { OnlineApp } from "./components/OnlineApp.js";
 import { OfflineApp } from "./components/OfflineApp.js";
 import { AdminPage } from "./components/AdminPage.js";
+import { Decor } from "./components/Decor.js";
 
 type View = "landing" | "online" | "offline" | "admin";
 
@@ -13,62 +14,79 @@ export default function App(): JSX.Element {
   if (view === "admin") return <AdminPage onBack={() => setView("landing")} />;
 
   return (
-    <main className="min-h-screen flex flex-col items-center px-4 py-10 sm:py-20">
-      <div className="w-full max-w-2xl space-y-10">
-        {/* Header */}
-        <header className="space-y-3 text-center">
-          <div className="inline-flex items-center gap-2 rounded-full bg-brand-blue-500/20 px-3 py-1 text-xs font-medium text-brand-blue-500 ring-1 ring-brand-blue-500/30">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand-green-500 animate-pulse" />
-            ETHSecurity
-          </div>
-          <h1 className="font-tight text-4xl sm:text-5xl tracking-tight leading-tight">
+    <section className="relative min-h-screen overflow-hidden pt-16 pb-24">
+      <Decor />
+
+      <div className="relative z-10 max-w-[1100px] mx-auto px-6">
+        {/* Hero video — lifted from thedao.fund/ethsecurity-badges */}
+        <div className="flex justify-center mb-10 animate-scaleIn">
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            src="/eth-security-badge.mp4"
+            className="max-w-sm w-full rounded-full shadow-2xl shadow-dao-green/20"
+          />
+        </div>
+
+        <header className="text-center mb-14 space-y-4 animate-fadeIn">
+          <h1 className="font-tight text-5xl md:text-6xl font-semibold tracking-tight leading-tight">
             Voting Badge
           </h1>
-          <p className="text-white/60 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
-            Badgeholders submit a private voting address. Addresses are encrypted
-            in the browser and decrypted offline by the admin after voting closes.
+          <p className="text-xl text-dao-green font-light">
+            Private voting for ETHSecurity badge holders
+          </p>
+          <p className="text-gray-300 text-base md:text-lg max-w-2xl mx-auto leading-relaxed pt-2">
+            Submit a voting address tied to your badge. It&apos;s encrypted in the
+            browser, decrypted offline by the admin after voting closes.
+            Your plaintext choice never leaves your device.
           </p>
         </header>
 
         {/* Mode buttons */}
-        <section className="grid sm:grid-cols-2 gap-4">
+        <div className="w-full h-px bg-gradient-to-r from-transparent via-dao-green/50 to-transparent mb-10" />
+
+        <section className="grid md:grid-cols-2 gap-6 animate-fadeIn">
           <ModeCard
             onClick={() => setView("online")}
             title="Online"
             badge="normal"
-            badgeClass="bg-brand-green-500/15 text-brand-green-500 ring-brand-green-500/30"
-            description="Connect your wallet in this browser, sign the voting message, and submit."
+            badgeClass="bg-dao-green/15 text-dao-green ring-dao-green/30"
+            description="Connect your wallet in this browser, sign the voting message, and submit. The fast path."
             bullets={[
               "RainbowKit + any supported wallet",
               "Auto-detects your badge tokenId onchain",
-              "One-click submit when signed",
+              "One click to submit once signed",
             ]}
           />
           <ModeCard
             onClick={() => setView("offline")}
             title="Offline"
             badge="airgapped"
-            badgeClass="bg-brand-red-500/15 text-brand-red-500 ring-brand-red-500/30"
+            badgeClass="bg-dao-red/15 text-dao-red ring-dao-red/30"
             description="For signers whose keys live on an airgapped machine. Sign locally, export a blob, submit later from an online machine."
             bullets={[
-              "Run this page locally on an offline machine",
+              "Run this page on an offline machine",
               "Sign via a local wallet OR copy-paste EIP-712",
               "Upload the signed blob from any online machine",
             ]}
           />
         </section>
 
-        <footer className="text-center text-xs text-white/30 pt-4">
-          <p>ETHSecurity Voting Badge &middot; DAO.fund</p>
+        <div className="w-full h-px bg-gradient-to-r from-transparent via-dao-green/50 to-transparent mt-10" />
+
+        <footer className="text-center text-xs text-white/40 pt-8 space-y-2">
+          <p>ETHSecurity Voting Badge &middot; TheDAO Security Fund</p>
           <button
             onClick={() => setView("admin")}
-            className="mt-2 text-white/20 hover:text-white/40 text-xs transition-colors"
+            className="text-white/30 hover:text-white/60 transition-colors"
           >
             Admin
           </button>
         </footer>
       </div>
-    </main>
+    </section>
   );
 }
 
@@ -86,26 +104,30 @@ function ModeCard({ onClick, title, badge, badgeClass, description, bullets }: M
     <button
       type="button"
       onClick={onClick}
-      className="group text-left rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-sm p-6 sm:p-7 hover:border-brand-blue-500/40 hover:bg-white/[0.06] active:scale-[0.98] transition-all duration-200"
+      className="group relative text-left rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 p-7 hover:border-dao-green/50 transition-all duration-300 overflow-hidden"
     >
-      <div className="flex items-start justify-between">
-        <h2 className="font-tight text-2xl">{title}</h2>
-        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ring-1 ${badgeClass}`}>
-          {badge}
-        </span>
+      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-dao-green/0 to-dao-green/0 group-hover:from-dao-green/10 group-hover:to-dao-green/5 transition-all duration-300" />
+      <div className="relative z-10">
+        <div className="flex items-start justify-between">
+          <h2 className="font-tight text-2xl font-semibold text-white">{title}</h2>
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ${badgeClass}`}>
+            {badge}
+          </span>
+        </div>
+        <p className="mt-3 text-sm text-gray-300 leading-relaxed">{description}</p>
+        <ul className="mt-4 space-y-2">
+          {bullets.map((b) => (
+            <li key={b} className="text-xs text-gray-400 flex gap-2 leading-relaxed">
+              <span className="text-dao-green">▸</span>
+              <span>{b}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-dao-green group-hover:gap-2.5 transition-all">
+          Open <span>→</span>
+        </div>
       </div>
-      <p className="mt-3 text-sm text-white/60 leading-relaxed">{description}</p>
-      <ul className="mt-4 space-y-1.5">
-        {bullets.map((b) => (
-          <li key={b} className="text-xs text-white/40 flex gap-2">
-            <span className="text-white/30">•</span>
-            <span>{b}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-5 text-xs font-medium text-brand-blue-500 group-hover:text-brand-blue-500">
-        Open →
-      </div>
+      <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 shadow-xl shadow-dao-green/20 pointer-events-none" />
     </button>
   );
 }

@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,9 +11,11 @@ body,
 }
 
 body {
-  background: linear-gradient(180deg, #1e3a5f 0%, #0f1f33 100%);
+  /* DAO.fund signature diagonal gradient — matches thedao.fund/ethsecurity-badges */
+  background: linear-gradient(142.716deg, #2C5E86 31.459%, #1F435F 90.396%);
+  background-attachment: fixed;
   color: #fff;
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
