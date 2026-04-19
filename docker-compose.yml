@@ -1,0 +1,87 @@
+# Production docker-compose for ethsec-voting-badge.
+#
+# Three services behind a Caddy reverse proxy:
+#   • postgres — encrypted-submission database
+#   • api      — Fastify backend (/config, /submit, /token-status, /admin, /health)
+#   • web      — Static Vite bundle + Caddy reverse proxy. Terminates HTTP(S),
+#                serves the app, and proxies API routes to `api:3001`.
+#
+# 1. Copy .env.example → .env and fill in real values.
+# 2. docker compose up -d --build
+# 3. Point your domain's A/AAAA record at the server IP. Set CADDY_DOMAIN
+#    in .env to that domain and Caddy auto-provisions Let's Encrypt TLS
+#    on first request.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ethsec
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "ethsec"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    # Not exposed to the host in prod — only reachable within the
+    # compose network. Uncomment for local debugging.
+    # ports:
+    #   - "5432:5432"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/ethsec
+      BADGE_CONTRACT:            ${BADGE_CONTRACT}
+      CHAIN_ID:                  ${CHAIN_ID}
+      RPC_URL:                   ${RPC_URL}
+      ADMIN_EXPORT_TOKEN:        ${ADMIN_EXPORT_TOKEN}
+      ENCRYPTION_PUBLIC_KEY_HEX: ${ENCRYPTION_PUBLIC_KEY_HEX}
+      CORS_ALLOWED_ORIGIN:       ${CORS_ALLOWED_ORIGIN:-*}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Internal only; Caddy is the public entry point.
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Same-origin proxy — the web container's Caddy forwards API
+        # routes to `api:3001` automatically, so the bundle makes
+        # relative `/config` / `/submit` / ... calls. Leave blank.
+        VITE_API_BASE_URL: ""
+        VITE_BADGE_CONTRACT:            ${BADGE_CONTRACT}
+        VITE_CHAIN_ID:                  ${CHAIN_ID}
+        VITE_RPC_URL:                   ${RPC_URL}
+        VITE_WALLETCONNECT_PROJECT_ID:  ${VITE_WALLETCONNECT_PROJECT_ID:-}
+        VITE_ENCRYPTION_PUBLIC_KEY_HEX: ${ENCRYPTION_PUBLIC_KEY_HEX}
+    restart: unless-stopped
+    environment:
+      # Override to "your-domain.com" once DNS points here; Caddy auto-
+      # provisions Let's Encrypt TLS. Leave as ":80" for local testing.
+      CADDY_DOMAIN: ${CADDY_DOMAIN:-:80}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      # Persist Caddy's TLS certificates across restarts.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:

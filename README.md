@@ -83,6 +83,35 @@ pnpm test         # full test suite
 pnpm typecheck    # tsc --noEmit
 ```
 
+### Deploying with Docker
+
+The repo ships a production-ready `docker-compose.yml` at the root that
+stands up Postgres + the API + a Caddy reverse proxy that also serves
+the web bundle.
+
+```bash
+# 1. Fill in secrets
+cp .env.example .env
+# edit .env — BADGE_CONTRACT, CHAIN_ID, RPC_URL, ENCRYPTION_PUBLIC_KEY_HEX,
+# ADMIN_EXPORT_TOKEN, POSTGRES_PASSWORD, and CADDY_DOMAIN if you have one
+
+# 2. Build + run
+docker compose up -d --build
+
+# 3. Apply DB schema (one-time)
+docker compose exec api pnpm --filter @ethsec/api db:push
+```
+
+With `CADDY_DOMAIN=:80` (the default) the app serves plain HTTP on port
+80. With `CADDY_DOMAIN=your-domain.com` Caddy auto-provisions Let's
+Encrypt TLS — just make sure the domain's A/AAAA records already point
+at the server and ports 80 + 443 are open.
+
+The Caddy config (`Caddyfile` at the repo root) proxies `/config`,
+`/submit`, `/token-status`, `/admin`, and `/health` to the API container
+and serves everything else from the built web bundle — so callers only
+ever see one origin.
+
 ### Running on a truly airgapped machine
 
 ```bash
