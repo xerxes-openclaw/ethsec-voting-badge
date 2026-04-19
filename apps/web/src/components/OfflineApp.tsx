@@ -304,9 +304,9 @@ pnpm --filter @ethsec/scripts sign-offline --in payload.json --out sig.txt
             Offline signing
           </h1>
           <p className="text-gray-300 text-base sm:text-lg max-w-lg mx-auto leading-relaxed">
-            For badge holders whose signing keys live on an airgapped machine. Sign the
-            voting message locally, export the signed blob, then come back online to
-            submit. No private key ever crosses the air gap.
+            Submit a private address to use for voting in TheDAO Security Fund rounds.
+            The connection between this address and your public address will be known only by Griff Green.
+            The goal is to minimize the politics of voting, while still maintaining a simple manageable voting solution.
           </p>
         </header>
 
