@@ -35,12 +35,12 @@ export default function App(): JSX.Element {
             ETHSecurity Voting Badge
           </h1>
           <p className="text-xl text-dao-green font-light">
-            Private voting address submission for ETHSecurity Badge holders
+            Submit your private voting address
           </p>
           <p className="text-gray-300 text-base md:text-lg max-w-2xl mx-auto leading-relaxed pt-2">
-            Submit a private address for exercising your voting power. It&apos;s encrypted in the 
-            browser, decrypted offline by Griff who will then send you your Voting NFT, gas money &
-            46 FINN. FINN tokens will be worth 1 Finney (0.001 ETH) when donated in the QF round.
+            Use this this tool to submit a private address for voting. The address will be encrypted 
+            in the browser, decrypted offline by Griff who will then send you your Voting NFT, gas money 
+            & 46 FINN. FINN tokens will be worth 1 Finney (0.001 ETH) if donated in the QF round.
           </p>
         </header>
 
