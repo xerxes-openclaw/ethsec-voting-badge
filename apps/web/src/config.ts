@@ -38,7 +38,15 @@ const rpcUrl = (env.VITE_RPC_URL ?? "") as string;
 const encryptionPublicKeyHex = (env.VITE_ENCRYPTION_PUBLIC_KEY_HEX ?? "") as string;
 
 /** Localtunnel hosts demand a `bypass-tunnel-reminder` header on every request. */
-export const isTunnelHost = (url: string): boolean => /\.loca\.lt$/i.test(new URL(url).hostname);
+export const isTunnelHost = (url: string): boolean => {
+  if (!url) return false;
+  try {
+    return /\.loca\.lt$/i.test(new URL(url).hostname);
+  } catch {
+    // Relative or empty base URLs aren't tunnels.
+    return false;
+  }
+};
 
 export const APP_CONFIG = {
   apiBaseUrl,

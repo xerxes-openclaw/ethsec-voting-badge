@@ -113,7 +113,9 @@ function main(): void {
     }
   }
 
-  writeFileSync(output, outRows.join("\n") + "\n");
+  // Owner-only read/write — the decrypted CSV contains plaintext voting
+  // addresses, treat like a secret until the round closes.
+  writeFileSync(output, outRows.join("\n") + "\n", { mode: 0o600 });
   console.log(`Decrypted ${ok} row(s), ${failed} failed. Output: ${output}`);
 }
 

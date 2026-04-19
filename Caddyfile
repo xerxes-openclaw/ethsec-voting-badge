@@ -1,0 +1,50 @@
+# Caddyfile for ethsec-voting-badge.
+#
+# CADDY_DOMAIN controls the site address:
+#   • Unset / ":80"  → plain HTTP on port 80 (local dev, container testing).
+#   • "example.com"  → Caddy auto-provisions Let's Encrypt TLS.
+#   • "https://x.y"  → HTTPS on 443 with auto-cert.
+#
+# API paths (/config, /submit, /token-status, /admin, /health) are proxied
+# to the api service on port 3001. Everything else is served from the
+# static web bundle baked into this image at build time.
+
+{$CADDY_DOMAIN::80} {
+	encode gzip zstd
+
+	# ----- API proxy -----
+	@api path /health /health/* /config /config/* /submit /submit/* /token-status /token-status/* /admin /admin/*
+	reverse_proxy @api api:3001 {
+		header_up Host {host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	# ----- Static web bundle (SPA fallback to index.html) -----
+	root * /srv/web
+	try_files {path} /index.html
+	file_server
+
+	# ----- Security headers -----
+	header {
+		# Clickjacking + MIME sniffing
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# HSTS kicks in once Caddy has a real TLS cert; harmless on :80.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Baseline CSP — the app has no inline scripts and fetches only
+		# from its own origin + the Vite/wagmi RPC endpoint at runtime.
+		# Font loading from Google Fonts is required for Inter Tight.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https: wss:; img-src 'self' data:; media-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+		# Remove Caddy's default server header
+		-Server
+	}
+
+	# ----- Log to stdout so `docker logs` sees requests -----
+	log {
+		output stdout
+		format console
+		level  INFO
+	}
+}

@@ -1,121 +1,139 @@
 # ETHSecurity Voting Badge
 
-A badgeholder-only voting-address registry. Each badge (ERC-721) can submit a
-single voting address. Addresses are encrypted in the browser with
-**ML-KEM-768 + AES-256-GCM**, stored as ciphertext, and decrypted offline by
-the admin after voting closes.
+A private voting-address registry for holders of the ETHSecurity Badge NFT.
+Addresses are encrypted in the browser with **ML-KEM-768 + AES-256-GCM**,
+stored as ciphertext, and decrypted offline by the admin after voting
+closes.
 
-```
-┌──────────────┐   signed+encrypted    ┌──────────┐        ┌──────────┐
-│  Badgeholder ├──────────────────────►│   API    ├───────►│ Postgres │
-│  (browser)   │   submission          │ Fastify  │        │          │
-└──────────────┘                       └──────────┘        └──────────┘
-                                             │
-                                  CSV export │ (bearer-auth)
-                                             ▼
-                                  ┌────────────────────────┐
-                                  │ Admin (Griff)          │
-                                  │ decrypts with ML-KEM   │
-                                  │ private key offline    │
-                                  └────────────────────────┘
-```
+## What the address is used for
 
----
+The address you submit will be encrypted in the browser and decrypted
+offline by Griff. He will send to that address:
 
-## Two modes on the landing page
+- Your Voting NFT
+- Gas money
+- 46 FINN — worth 1 Finney (0.001 ETH) each if donated in the QF round
 
-When you open the app, you pick one of two modes:
+Every $1 donated from your submitted address counts as $4 toward
+directing the matching pool. The same address may be used in future
+rounds.
 
-### Online mode — normal dApp flow
+## Two modes
 
-For badgeholders signing on a regular, internet-connected machine.
+When you open the app you pick one of two modes.
 
-1. Open the hosted URL, click **Online**.
-2. **Connect Wallet** → pick the wallet that holds your badge NFT.
-3. The app auto-detects your badge `tokenId` from onchain `Transfer` logs.
-4. Enter the voting address you want recorded.
-5. Click **Encrypt & Sign** → sign the EIP-712 message. The voting address
-   is encrypted in-browser and POSTed with the signature.
-6. You'll see a success checkmark. Done.
+### Online — normal dApp flow
 
-One badge = one submission. Re-submitting from the same badge is rejected.
+For badgeholders on a regular internet-connected machine.
 
-### Offline mode — airgapped signing
+1. Click **Online**.
+2. **Connect Wallet** → pick the wallet holding your badge.
+3. The app auto-detects your `tokenId` onchain.
+4. Enter your voting address → **Encrypt & Sign**.
+5. Sign the EIP-712 message. The voting address is encrypted in-browser
+   and posted with the signature.
 
-For badgeholders whose signing key lives on an airgapped machine. Sign the
-voting message locally, export the signed blob, and come back to an online
-machine to submit.
+One badge = one submission. Re-submissions are rejected.
 
-Two sub-flows, both on the same page:
+### Offline — airgapped signing
 
-**A. Sign here, submit later (or elsewhere)**
+For badgeholders whose signing key lives on an airgapped machine.
 
-1. Click **Offline** on the landing page.
-2. Fill in: holder wallet, badge token ID, voting address.
+1. Click **Offline**.
+2. Fill in: holder wallet, badge tokenId, voting address.
 3. Click **Encrypt & prepare message**.
 4. Pick a signing path:
-   - **Connect wallet** — uses any wallet extension present on this machine
-     (MetaMask, Rabby, Frame, or a hardware wallet plugged in). Signs via
-     wagmi's normal EIP-712 flow.
-   - **Sign externally** — copy the EIP-712 payload JSON, sign with your
-     own tool, paste the `0x…` signature back into the form. Two ready-
-     to-paste paths shown in the UI: Foundry's `cast wallet sign-typed-data`
-     for that crowd, and our ethers-based `pnpm sign-offline` script (see
-     `scripts/sign-offline.ts`, patterned after
-     [pcaversaccio/raw-tx](https://github.com/pcaversaccio/raw-tx) — same
-     ergonomics, just EIP-712 instead of raw-transaction). Anything that
-     produces a valid EIP-712 signature works; the page verifies the
-     signature recovers to the holder wallet before allowing export.
-5. The signed blob downloads as `ethsec-submission-badge-<id>.json`.
-6. When you reach an online machine, open this same app, pick **Offline**
-   again, and use the **Submit a signed blob** section near the bottom to
-   upload the file.
+   - **Connect wallet** — uses a local wallet extension (MetaMask, Rabby,
+     Frame) including any hardware wallet plugged into this machine.
+   - **Sign externally** — copy the EIP-712 payload, sign with `cast
+     wallet sign-typed-data`, `pnpm sign-offline`, MyEtherWallet's
+     offline signer, or any other EIP-712 signer; paste the `0x…`
+     signature back. The page verifies the signature recovers to the
+     declared holder wallet before producing the blob.
+5. Download the signed blob `ethsec-submission-badge-<id>.json`.
+6. On any online machine, open the app again, pick **Offline**, and use
+   the **Submit a signed blob** section to upload.
 
-**B. Submit a pre-signed blob (online machine, bringing someone else's blob back)**
+What crosses the air gap: the signed JSON. What stays on the signing
+machine: the private key and the plaintext voting address.
 
-1. Open the app on any online machine, pick **Offline**.
-2. Scroll to **Submit a signed blob**.
-3. Pick the `.json` file. The server verifies the signature + onchain badge
-   ownership and stores the submission.
-
-What crosses the air gap: the signed JSON (signature + ciphertext). What
-never leaves the signing machine: the wallet's private key and the
-plaintext voting address.
-
-### Running offline mode on a truly airgapped machine
+## Running locally
 
 ```bash
-# On an online machine:
 git clone https://github.com/griffgiveth/ethsec-voting-badge.git
 cd ethsec-voting-badge
 pnpm install
+
+# Start Postgres (Docker)
+docker compose -f apps/api/docker-compose.yml up -d
+
+# Apply schema
+pnpm --filter @ethsec/api db:push
+
+# Run both servers
+pnpm dev
+# API → http://localhost:3001
+# Web → http://localhost:5174
+```
+
+Verify:
+
+```bash
+pnpm test         # full test suite
+pnpm typecheck    # tsc --noEmit
+```
+
+### Deploying with Docker
+
+The repo ships a production-ready `docker-compose.yml` at the root that
+stands up Postgres + the API + a Caddy reverse proxy that also serves
+the web bundle.
+
+```bash
+# 1. Fill in secrets
+cp .env.example .env
+# edit .env — BADGE_CONTRACT, CHAIN_ID, RPC_URL, ENCRYPTION_PUBLIC_KEY_HEX,
+# ADMIN_EXPORT_TOKEN, POSTGRES_PASSWORD, and CADDY_DOMAIN if you have one
+
+# 2. Build + run
+docker compose up -d --build
+
+# 3. Apply DB schema (one-time)
+docker compose exec api pnpm --filter @ethsec/api db:push
+```
+
+With `CADDY_DOMAIN=:80` (the default) the app serves plain HTTP on port
+80. With `CADDY_DOMAIN=your-domain.com` Caddy auto-provisions Let's
+Encrypt TLS — just make sure the domain's A/AAAA records already point
+at the server and ports 80 + 443 are open.
+
+The Caddy config (`Caddyfile` at the repo root) proxies `/config`,
+`/submit`, `/token-status`, `/admin`, and `/health` to the API container
+and serves everything else from the built web bundle — so callers only
+ever see one origin.
+
+### Running on a truly airgapped machine
+
+```bash
+# On an online machine:
+pnpm install
 pnpm --filter @ethsec/web build
 
-# Copy apps/web/dist/ to USB, move to the airgapped machine, then:
+# Copy apps/web/dist/ to a USB, move to the airgapped machine, then serve:
 npx --yes http-server apps/web/dist -p 5174
 ```
 
-Open `http://localhost:5174` on the airgapped machine, pick **Offline**,
-and follow sub-flow A above.
+Open `http://localhost:5174`, pick **Offline**, follow the steps above.
 
-For the page to work without reaching the backend, set
-`VITE_ENCRYPTION_PUBLIC_KEY_HEX` at build time to the public key you'll
-eventually submit against. The offline page then encrypts locally instead
-of fetching `/config`.
+Set `VITE_ENCRYPTION_PUBLIC_KEY_HEX` at build time so the page doesn't
+need to fetch `/config` from the backend.
 
-Alternative submit path from any terminal:
+## Admin lifecycle
 
-```bash
-curl -X POST -H 'content-type: application/json' \
-  --data-binary @ethsec-submission-badge-42.json \
-  https://<hosted-api-url>/submit
-```
+Before production, the admin generates two secrets on their own machine
+and keeps them forever.
 
----
-
-## For the admin (Griff) — full lifecycle
-
-### Step 1 — Generate your keypair (do this ONCE, on your own machine)
+### 1. Keypair
 
 ```bash
 pnpm install
@@ -124,144 +142,79 @@ pnpm --filter @ethsec/scripts keygen ./keys
 
 Outputs:
 
-- `./keys/public.key` — safe to share with anyone. Goes into env vars.
-- `./keys/private.key` — **NEVER share, never commit, never upload.**
-  Back it up somewhere only you control (1Password, hardware token, etc.).
+- `./keys/public.key` — goes in `ENCRYPTION_PUBLIC_KEY_HEX` +
+  `VITE_ENCRYPTION_PUBLIC_KEY_HEX` on the server. Safe to share.
+- `./keys/private.key` — NEVER share, never commit, never upload. Lose
+  this and you lose the ability to decrypt any submission.
 
-If you lose `private.key` you can't decrypt any submissions. Ever.
-
-### Step 2 — Generate the admin export token
+### 2. Export token
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Copy the output. This is the bearer token that gates the encrypted CSV
-dump. Keep a copy for yourself and send another to the devs (out-of-band
-— see "Secure hand-off" below).
+Copy the 64-char hex string. This is your `ADMIN_EXPORT_TOKEN`. Also
+never share unless via a secure channel (Signal, 1Password, age).
 
-### Step 3 — Hand off to the deployers
+### 3. Deploy env vars
 
-Give your devs these three values to set as env vars on the deployed
-infrastructure:
+| Variable                          | Source                              |
+| --------------------------------- | ----------------------------------- |
+| `ENCRYPTION_PUBLIC_KEY_HEX`       | `./keys/public.key` contents        |
+| `VITE_ENCRYPTION_PUBLIC_KEY_HEX`  | `./keys/public.key` contents        |
+| `ADMIN_EXPORT_TOKEN`              | random 64-char hex from step 2      |
+| `DATABASE_URL`                    | postgres connection string          |
+| `BADGE_CONTRACT`                  | badge NFT address                   |
+| `CHAIN_ID`                        | chain id (1 = mainnet)              |
+| `RPC_URL`                         | RPC endpoint for onchain checks     |
+| `CORS_ALLOWED_ORIGIN`             | the web app's origin URL            |
 
-| Env var                           | Source                         | Where it goes |
-| --------------------------------- | ------------------------------ | ------------- |
-| `ENCRYPTION_PUBLIC_KEY_HEX`       | contents of `keys/public.key`  | API server    |
-| `VITE_ENCRYPTION_PUBLIC_KEY_HEX`  | contents of `keys/public.key`  | Web build     |
-| `ADMIN_EXPORT_TOKEN`              | the hex token from Step 2      | API server    |
+See `apps/api/.env.example` and `apps/web/.env.example`.
 
-Plus the other boilerplate envs (`DATABASE_URL`, `BADGE_CONTRACT`,
-`CHAIN_ID`, `RPC_URL`, `CORS_ALLOWED_ORIGIN`, `VITE_API_URL`) — see the
-`.env.example` files in `apps/api/` and `apps/web/`.
+### 4. Decrypt after voting closes
 
-**Keep locally (never upload):**
+**In-browser** — open `<your-url>` → footer → **Admin**, paste the token
+and private key, click **Fetch & Decrypt**, **Download** the CSV. All
+decryption happens client-side.
 
-- `keys/private.key`
-- A copy of `ADMIN_EXPORT_TOKEN`
-
-### Step 4 — After voting closes, decrypt
-
-Two options — pick whichever you prefer.
-
-**Option A — in-browser admin page** (easiest)
-
-1. Open `<deployed-url>/admin`
-2. Paste `ADMIN_EXPORT_TOKEN` into the token field.
-3. Paste the contents of `keys/private.key` into the private-key field.
-4. Click "Fetch & Decrypt." The browser talks to the API, pulls the CSV,
-   and decrypts locally. Neither secret hits a server.
-5. Click "Download" for a CSV with plaintext `voting_address` per row.
-
-**Option B — offline CLI script** (most paranoid)
+**Offline CLI** — for the most paranoid setup:
 
 ```bash
-# 1. Download encrypted CSV (can run from anywhere with the token)
+# 1. Fetch encrypted CSV
 curl -H "Authorization: Bearer $ADMIN_EXPORT_TOKEN" \
   https://<api-host>/admin/export -o encrypted-export.csv
 
-# 2. Decrypt locally (air-gapped machine if you want)
+# 2. Decrypt locally (air-gapped OK)
 pnpm --filter @ethsec/scripts decrypt \
   --in encrypted-export.csv \
   --key ./keys/private.key \
   --out decrypted.csv
 ```
 
-Both options produce a CSV with a `voting_address` column holding the
-plaintext addresses submitted by badgeholders.
-
----
-
-## Secure hand-off — how to share secrets WITHOUT leaking them
-
-**Never paste secrets into Telegram, Slack, or email.** Those channels
-are not end-to-end encrypted; the server keeps copies.
-
-Acceptable channels:
-
-- Signal (free, e2e)
-- 1Password shared vault
-- Keybase encrypted chat
-- `age -r <recipient-pubkey>` encrypted blob over any channel
-- In person / USB stick
-
-The `public.key` is safe to share anywhere — you can paste it into
-Telegram, email it, tweet it. Only the `private.key` and
-`ADMIN_EXPORT_TOKEN` need the secure channel.
-
----
-
 ## Architecture
 
-| Package            | Role                                                         |
-| ------------------ | ------------------------------------------------------------ |
-| `apps/api`         | Fastify server. Routes: `/config`, `/submit`, `/token-status/:id`, `/admin/export`. Verifies EIP-712 signature + onchain ERC-721 ownership before insert. |
-| `apps/web`         | Vite + React + RainbowKit. Submission flow + admin decrypt page. |
-| `packages/shared`  | Hybrid encryption (ML-KEM-768 + AES-256-GCM). Browser- and Node-safe. |
-| `scripts`          | `keygen` (ML-KEM keypair), `decrypt` (offline CSV decrypt). |
+| Package            | Role                                                                    |
+| ------------------ | ----------------------------------------------------------------------- |
+| `apps/api`         | Fastify server. Verifies EIP-712 sig + onchain ERC-721 ownership.       |
+| `apps/web`         | Vite + React + RainbowKit frontend. Submission and admin-decrypt UI.   |
+| `packages/shared`  | Hybrid encryption (ML-KEM-768 + AES-256-GCM). Browser- and Node-safe.  |
+| `scripts`          | `keygen`, `decrypt`, `sign-offline` CLI tools.                          |
 
-See `apps/api/README.md` for DB/driver details and routing specifics.
+API routes: `GET /config`, `GET /token-status/:id`, `POST /submit`,
+`GET /admin/export` (bearer-auth).
 
----
+## Security model
 
-## Local development
+Admin power is split across two secrets held by the same person:
 
-```bash
-pnpm install
+1. `ADMIN_EXPORT_TOKEN` — grants access to the encrypted CSV dump.
+2. ML-KEM-768 private key — decrypts the ciphertexts.
 
-# Start Postgres
-docker compose -f apps/api/docker-compose.yml up -d
+Either alone is useless: token → ciphertext blobs you can't read;
+private key → nothing to fetch. Both secrets live only on the admin's
+local machine. The browser admin page decrypts entirely client-side; the
+private key never reaches a server.
 
-# Apply schema
-pnpm --filter @ethsec/api db:push
+## License
 
-# Run both servers
-pnpm dev
-# API  → http://localhost:3001
-# Web  → http://localhost:5174
-```
-
-Verify:
-
-```bash
-pnpm test         # vitest across all packages
-pnpm typecheck    # tsc --noEmit
-```
-
----
-
-## Security model — two-secret admin
-
-The admin's power is split across two secrets held by the same person:
-
-1. **`ADMIN_EXPORT_TOKEN`** — grants access to the encrypted CSV.
-2. **ML-KEM-768 private key** — decrypts the ciphertexts.
-
-An attacker who steals one without the other gets nothing useful:
-
-- Token alone → ciphertext blobs, no way to read them.
-- Private key alone → no way to fetch the blobs.
-
-Both secrets live only on the admin's local machine. The browser-based
-admin page performs decryption entirely client-side; the private key
-never reaches a server.
+MIT.
