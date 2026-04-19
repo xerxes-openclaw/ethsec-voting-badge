@@ -44,11 +44,12 @@ export function OnlineApp({ onBack }: Props): JSX.Element {
             Online mode
           </div>
           <h1 className="font-tight text-4xl sm:text-5xl font-semibold tracking-tight leading-tight">
-            Voting Badge
+            ETHSecurity Voting Badge
           </h1>
           <p className="text-gray-300 text-base max-w-md mx-auto leading-relaxed">
-            Submit a private voting address tied to your ETHSecurity badge.
-            Your choice is encrypted in-browser and signed with your wallet.
+            Submit a private address to use for voting in TheDAO Security Fund rounds.
+            The connection between this address and your public address will be known only by Griff Green.
+            The goal is to minimize the politics of voting, while still maintaining a simple manageable voting solution.
           </p>
         </header>
 
