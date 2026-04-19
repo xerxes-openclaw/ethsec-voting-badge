@@ -39,8 +39,8 @@ export default function App(): JSX.Element {
           </p>
           <p className="text-gray-300 text-base md:text-lg max-w-2xl mx-auto leading-relaxed pt-2">
             Submit a private address for exercising your voting power. It&apos;s encrypted in the 
-            browser, decrypted offline by Griff who will then send you your Voting NFT, as well as gas 
-            money and 46 FINN (tokens that will be worth 1 Finney (0.001 ETH) when donated in the QF round.
+            browser, decrypted offline by Griff who will then send you your Voting NFT, gas money &
+            46 FINN. FINN tokens will be worth 1 Finney (0.001 ETH) when donated in the QF round.
           </p>
         </header>
 
