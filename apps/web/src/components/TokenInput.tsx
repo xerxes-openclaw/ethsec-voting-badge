@@ -198,6 +198,22 @@ function BadgeField({
     );
   }
 
+  if (held.status === "multi_badge") {
+    return (
+      <div className="space-y-2">
+        {label}
+        <div className="w-full rounded-xl bg-brand-red-500/10 border border-brand-red-500/30 px-4 py-3 text-sm text-brand-red-500">
+          <p className="font-medium mb-1">This wallet holds {held.balance.toString()} badges</p>
+          <p className="text-xs text-brand-red-500/80">
+            One holder = one voting address. Wallets that hold more than one badge can&apos;t
+            submit. Transfer the extras to a different wallet first, or submit from a
+            wallet that only holds one badge.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (held.tokenIds.length === 0) {
     return (
       <div className="space-y-2">

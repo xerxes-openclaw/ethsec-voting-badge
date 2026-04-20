@@ -87,7 +87,12 @@ export async function submitRoute(app: FastifyInstance, deps: SubmitRouteDeps): 
     if (ownership) {
       const own = await ownership.check(submission.tokenId, submission.holderWallet);
       if (!own.ownsThisToken) return reply.code(403).send({ error: "not_owner" });
-      if (own.balance !== 1n) return reply.code(403).send({ error: "multi_badge_or_zero" });
+      // Multi-badge holders can't submit — one holder, one voting address.
+      // Balance 0 is already caught by !ownsThisToken above; this only
+      // fires when balance > 1.
+      if (own.balance > 1n) {
+        return reply.code(403).send({ error: "multi_badge_holder_not_supported" });
+      }
     }
 
     // 5. Persist. UNIQUE(token_id) is the authoritative duplicate check.

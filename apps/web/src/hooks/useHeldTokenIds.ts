@@ -26,27 +26,37 @@ const ERC721_ABI = [
 
 export type HeldTokenIdsState =
   | { status: "idle" }
-  | { status: "loading"; scannedBlocks: bigint }
+  | { status: "loading" }
   | { status: "ready"; tokenIds: string[] }
+  | { status: "multi_badge"; balance: bigint }
   | { status: "error"; error: string };
 
 /**
  * Detects which tokenIds of the configured badge contract the given wallet
  * currently holds.
  *
- *   1. Short-circuit via balanceOf — if the wallet holds zero badges, skip
- *      the log scan entirely. Saves seconds of RPC calls.
- *   2. Otherwise scan Transfer(_, to=wallet, _) logs, chunking backwards
- *      from `latest` in 49k-block batches (most public RPCs cap at 50k).
- *      Stop as soon as we've discovered as many tokens as balanceOf says
- *      the wallet holds, or when we've covered the contract's full
- *      plausible history.
- *   3. Verify each candidate via ownerOf so we don't include tokens the
- *      wallet has since transferred away.
+ * Why log scanning and not something simpler:
+ *   • `ownerOf(tokenId)` answers "who owns token N" but not "which tokens
+ *     does W own" — that's a different question entirely.
+ *   • `balanceOf(w)` answers "how many" but not "which".
+ *   • ERC-721 Enumerable would give us `tokenOfOwnerByIndex`, but the
+ *     ETHSecurity Badge contract does not implement it.
+ *   • `totalSupply()` + iterate `ownerOf(1..N)` would work — but this
+ *     contract reverts on `totalSupply()`.
+ *   • So scanning Transfer(to=wallet) logs is the only standards-
+ *     compliant way for this specific contract.
  *
- * Good enough for small/medium collections over months of history. For
- * huge collections or years of history, swap to an NFT-indexer API
- * (Alchemy getNFTsForOwner / Moralis / thirdweb) behind this interface.
+ * Policy: multi-badge holders (balance > 1) cannot submit (one holder =
+ * one voting address). We short-circuit that case WITHOUT running the
+ * log scan and surface it as a dedicated state the UI can render.
+ *
+ * Performance:
+ *   1. balanceOf — one call.
+ *   2. balance === 0 → done (common for most visitors)
+ *   3. balance  >  1 → done, "multi_badge" state (blocked)
+ *   4. balance === 1 → find the ONE tokenId via parallel chunked log
+ *      scan (4 chunks at a time). Early-exit as soon as any match
+ *      verifies via ownerOf.
  */
 export function useHeldTokenIds(wallet: Address | undefined): HeldTokenIdsState {
   const client = usePublicClient({ chainId: APP_CONFIG.chainId });
@@ -60,9 +70,9 @@ export function useHeldTokenIds(wallet: Address | undefined): HeldTokenIdsState 
     let cancelled = false;
 
     (async () => {
-      setState({ status: "loading", scannedBlocks: 0n });
+      setState({ status: "loading" });
       try {
-        // Step 1 — balanceOf short-circuit.
+        // 1) balanceOf short-circuit
         const balance = (await client
           .readContract({
             address: APP_CONFIG.badgeContract,
@@ -72,48 +82,59 @@ export function useHeldTokenIds(wallet: Address | undefined): HeldTokenIdsState 
           })
           .catch(() => 0n)) as bigint;
 
+        if (cancelled) return;
         if (balance === 0n) {
-          if (!cancelled) setState({ status: "ready", tokenIds: [] });
+          setState({ status: "ready", tokenIds: [] });
+          return;
+        }
+        if (balance > 1n) {
+          setState({ status: "multi_badge", balance });
           return;
         }
 
-        // Step 2 — chunked log scan walking backwards from head.
+        // 2) balance === 1 → find the single tokenId.
+        // Parallel chunked Transfer-log scan. 4 chunks in flight at a
+        // time keeps RPC bursts manageable on public endpoints while
+        // hiding most of the latency.
         const CHUNK = 49_000n;
-        // Max history to cover before giving up, in blocks. Default ≈ 2M
-        // blocks (roughly 8 months on mainnet). Override via env when a
-        // contract is older than that.
+        const PARALLEL = 4;
         const MAX_SCAN = APP_CONFIG.maxLogScanBlocks;
         const head = await client.getBlockNumber();
         const floor = head > MAX_SCAN ? head - MAX_SCAN : 0n;
 
-        const foundIds = new Set<bigint>();
-        let cursor = head;
-        while (cursor > floor && !cancelled) {
-          const from = cursor > floor + CHUNK ? cursor - CHUNK : floor;
-          const chunk = await client.getLogs({
-            address: APP_CONFIG.badgeContract,
-            event: TRANSFER_EVENT,
-            args: { to: wallet },
-            fromBlock: from,
-            toBlock: cursor,
-          });
-          for (const l of chunk) {
-            if (typeof l.args.tokenId === "bigint") foundIds.add(l.args.tokenId);
-          }
-          if (!cancelled) {
-            setState({ status: "loading", scannedBlocks: head - from });
-          }
-          // Early exit once we've discovered as many tokens as balanceOf
-          // says this wallet currently holds — even if some are later
-          // filtered out by the ownerOf check, we'll still find all the
-          // ones they hold now.
-          if (BigInt(foundIds.size) >= balance) break;
+        const windows: Array<{ from: bigint; to: bigint }> = [];
+        for (let to = head; to > floor; ) {
+          const from = to > floor + CHUNK ? to - CHUNK : floor;
+          windows.push({ from, to });
           if (from === floor) break;
-          cursor = from - 1n;
+          to = from - 1n;
         }
 
-        // Step 3 — verify current ownership.
-        const candidates = Array.from(foundIds);
+        const found = new Set<bigint>();
+        for (let i = 0; i < windows.length && !cancelled; i += PARALLEL) {
+          const batch = windows.slice(i, i + PARALLEL);
+          const results = await Promise.all(
+            batch.map((w) =>
+              client.getLogs({
+                address: APP_CONFIG.badgeContract,
+                event: TRANSFER_EVENT,
+                args: { to: wallet },
+                fromBlock: w.from,
+                toBlock: w.to,
+              }),
+            ),
+          );
+          for (const chunk of results) {
+            for (const l of chunk) {
+              if (typeof l.args.tokenId === "bigint") found.add(l.args.tokenId);
+            }
+          }
+          if (found.size > 0) break; // balance is 1 — one match is enough
+        }
+
+        // 3) Verify current ownership (the wallet may have transferred it
+        // after the Transfer event we scanned).
+        const candidates = Array.from(found);
         const owners = await Promise.all(
           candidates.map((id) =>
             client
@@ -132,8 +153,7 @@ export function useHeldTokenIds(wallet: Address | undefined): HeldTokenIdsState 
             const owner = owners[i];
             return typeof owner === "string" && owner.toLowerCase() === wallet.toLowerCase();
           })
-          .map((id) => id.toString())
-          .sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1));
+          .map((id) => id.toString());
 
         if (!cancelled) setState({ status: "ready", tokenIds: held });
       } catch (e) {

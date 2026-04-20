@@ -208,13 +208,13 @@ describe("POST /submit (with onchain ownership checker)", () => {
     expect(res.json().error).toBe("not_owner");
   });
 
-  it("403 multi_badge_or_zero when balance != 1", async () => {
+  it("403 multi_badge_holder_not_supported when balance > 1", async () => {
     await reset();
     nextOwnership = { ownsThisToken: true, balance: 2n };
     const body = await makeValidSubmission({ tokenId: "2002" });
     const res = await app.inject({ method: "POST", url: "/submit", payload: body });
     expect(res.statusCode).toBe(403);
-    expect(res.json().error).toBe("multi_badge_or_zero");
+    expect(res.json().error).toBe("multi_badge_holder_not_supported");
   });
 
   it("200 when ownership checker passes", async () => {
