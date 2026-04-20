@@ -112,10 +112,23 @@ export function OfflineApp({ onBack }: Props): JSX.Element {
       let chainId = APP_CONFIG.chainId;
       let badgeContract = APP_CONFIG.badgeContract as Address;
       if (!pubKeyHex) {
-        const cfg = await getConfig();
-        pubKeyHex = cfg.encryptionPublicKey;
-        chainId = cfg.chainId;
-        badgeContract = cfg.badgeContract;
+        try {
+          const cfg = await getConfig();
+          pubKeyHex = cfg.encryptionPublicKey;
+          chainId = cfg.chainId;
+          badgeContract = cfg.badgeContract;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          setPrep({
+            status: "error",
+            message:
+              "Couldn't fetch the encryption config from the server. " +
+              "For fully airgapped setups, build this bundle with " +
+              "VITE_ENCRYPTION_PUBLIC_KEY_HEX set so the page doesn't need " +
+              "network access. (" + msg + ")",
+          });
+          return;
+        }
       }
 
       const issuedAt = Math.floor(Date.now() / 1000);

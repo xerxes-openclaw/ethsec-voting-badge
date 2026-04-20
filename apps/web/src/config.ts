@@ -37,6 +37,12 @@ const rpcUrl = (env.VITE_RPC_URL ?? "") as string;
  */
 const encryptionPublicKeyHex = (env.VITE_ENCRYPTION_PUBLIC_KEY_HEX ?? "") as string;
 
+// How far back to scan Transfer logs when auto-detecting badges. Default
+// 2,000,000 blocks (~8 months on mainnet) — enough for most contracts.
+// Override via VITE_MAX_LOG_SCAN_BLOCKS for older collections.
+const rawMaxScan = env.VITE_MAX_LOG_SCAN_BLOCKS ?? "2000000";
+const maxLogScanBlocks = BigInt(rawMaxScan);
+
 /** Localtunnel hosts demand a `bypass-tunnel-reminder` header on every request. */
 export const isTunnelHost = (url: string): boolean => {
   if (!url) return false;
@@ -55,6 +61,7 @@ export const APP_CONFIG = {
   walletConnectProjectId,
   rpcUrl,
   encryptionPublicKeyHex,
+  maxLogScanBlocks,
   isTunnel: isTunnelHost(apiBaseUrl),
 } as const;
 
