@@ -1,6 +1,17 @@
-import { getDefaultConfig } from "@rainbow-me/rainbowkit";
+import { connectorsForWallets } from "@rainbow-me/rainbowkit";
+import {
+  injectedWallet,
+  metaMaskWallet,
+  rabbyWallet,
+  walletConnectWallet,
+  coinbaseWallet,
+  rainbowWallet,
+  frameWallet,
+  safeWallet,
+} from "@rainbow-me/rainbowkit/wallets";
+import { createConfig, http } from "wagmi";
 import { mainnet, sepolia } from "wagmi/chains";
-import { http, type Chain } from "viem";
+import { type Chain } from "viem";
 import { APP_CONFIG } from "./config.js";
 
 const SUPPORTED: Record<number, Chain> = {
@@ -10,15 +21,30 @@ const SUPPORTED: Record<number, Chain> = {
 
 export const expectedChain: Chain = SUPPORTED[APP_CONFIG.chainId] ?? mainnet;
 
-export const wagmiConfig = getDefaultConfig({
-  appName: "ETHSecurity Voting Badge",
-  // WalletConnect project ID — injected wallets work without it,
-  // but WalletConnect QR won't show unless a real one is provided.
-  projectId: APP_CONFIG.walletConnectProjectId || "PLACEHOLDER",
+// Explicit wallet list. `injectedWallet` catches any EIP-6963 announced
+// browser extension (Rabby, Rainbow, Frame, Brave Wallet, etc.) that isn't
+// covered by a dedicated entry above, so users with wallets other than
+// MetaMask get a direct in-extension connect instead of a WalletConnect QR.
+const projectId = APP_CONFIG.walletConnectProjectId || "PLACEHOLDER";
+const connectors = connectorsForWallets(
+  [
+    {
+      groupName: "Recommended",
+      wallets: [metaMaskWallet, rabbyWallet, injectedWallet],
+    },
+    {
+      groupName: "Other",
+      wallets: [rainbowWallet, coinbaseWallet, frameWallet, safeWallet, walletConnectWallet],
+    },
+  ],
+  { appName: "ETHSecurity Voting Badge", projectId },
+);
+
+export const wagmiConfig = createConfig({
+  connectors,
   chains: [expectedChain],
-  // When VITE_RPC_URL is set, override the default transport so our log-scan
-  // hook doesn't get capped at 1000 blocks by random thirdweb/Infura RPCs.
-  ...(APP_CONFIG.rpcUrl
-    ? { transports: { [expectedChain.id]: http(APP_CONFIG.rpcUrl) } }
-    : {}),
+  transports: {
+    [expectedChain.id]: APP_CONFIG.rpcUrl ? http(APP_CONFIG.rpcUrl) : http(),
+  },
+  ssr: false,
 });

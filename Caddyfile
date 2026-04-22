@@ -13,17 +13,26 @@
 	encode gzip zstd
 
 	# ----- API proxy -----
-	@api path /health /health/* /config /config/* /submit /submit/* /token-status /token-status/* /admin /admin/*
-	reverse_proxy @api api:3001 {
-		header_up Host {host}
-		header_up X-Forwarded-For {remote_host}
-		header_up X-Forwarded-Proto {scheme}
+	# Use `handle` blocks so routing is explicit, not order-dependent.
+	# Without them, Caddy's directive order runs `try_files` BEFORE
+	# `reverse_proxy` and rewrites /config → /index.html before the
+	# reverse_proxy matcher gets a chance to fire. Result: API paths
+	# silently serve the SPA (front-end gets "Unexpected token '<'"
+	# trying to JSON.parse HTML, and POST /submit returns 405).
+	handle /health* /config* /submit* /token-status* /admin* {
+		reverse_proxy api:3001 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
 	}
 
 	# ----- Static web bundle (SPA fallback to index.html) -----
-	root * /srv/web
-	try_files {path} /index.html
-	file_server
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
 
 	# ----- Security headers -----
 	header {
