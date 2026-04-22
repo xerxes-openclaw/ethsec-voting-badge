@@ -19,7 +19,7 @@ describe("GET /token-status/:tokenId", () => {
     db = test.db;
     dispose = test.dispose;
     reset = test.reset;
-    app = await buildServer({ db });
+    app = await buildServer({ db, ownership: null });
   });
 
   afterAll(async () => {

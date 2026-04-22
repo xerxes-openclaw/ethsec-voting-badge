@@ -20,9 +20,10 @@ export interface BuildServerOptions {
   env?: Env;
   /**
    * Override the onchain ownership checker. Pass `null` to disable the
-   * check entirely (e.g. /submit tests that don't want to hit an RPC).
-   * Default: build one from `env.RPC_URL` + `env.BADGE_CONTRACT`, or
-   * `null` if `RPC_URL` is unset.
+   * check entirely (e.g. tests that don't want to hit an RPC).
+   *
+   * When omitted, production/default startup must have `RPC_URL` so the
+   * server can enforce badge ownership on `/submit`.
    */
   ownership?: OwnershipChecker | null;
 }
@@ -38,7 +39,10 @@ export async function buildServer(opts: BuildServerOptions = {}) {
     const client = makePublicClient(env.CHAIN_ID, env.RPC_URL);
     ownership = makeOwnershipChecker(client, env.BADGE_CONTRACT as `0x${string}`);
   } else {
-    ownership = null;
+    throw new Error(
+      "RPC_URL is required unless buildServer() is given an explicit ownership override. " +
+        "Refusing to start with onchain ownership checks disabled.",
+    );
   }
 
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" } });
