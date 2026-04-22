@@ -1,0 +1,15 @@
+# Overlay for CI/CD deployments — replaces build: directives with pre-built
+# images from GHCR. Used together with docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# The .env file on the server supplies all runtime secrets (POSTGRES_PASSWORD,
+# ADMIN_EXPORT_TOKEN, CADDY_DOMAIN, etc.). See .env.example.
+
+services:
+  api:
+    build: !reset null
+    image: ghcr.io/geleeroyale/ethsec-api:latest
+
+  web:
+    build: !reset null
+    image: ghcr.io/geleeroyale/ethsec-web:latest
