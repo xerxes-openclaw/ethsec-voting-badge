@@ -19,7 +19,8 @@
 	# reverse_proxy matcher gets a chance to fire. Result: API paths
 	# silently serve the SPA (front-end gets "Unexpected token '<'"
 	# trying to JSON.parse HTML, and POST /submit returns 405).
-	handle /health* /config* /submit* /token-status* /admin* {
+	@api path /health* /config* /submit* /token-status* /admin*
+	handle @api {
 		reverse_proxy api:3001 {
 			header_up Host {host}
 			header_up X-Forwarded-For {remote_host}
