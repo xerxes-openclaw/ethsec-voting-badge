@@ -3,33 +3,45 @@ import { decryptBundle } from "@ethsec/shared";
 import { APP_CONFIG } from "../config.js";
 
 interface DecryptedRow {
+  id: string;
   tokenId: string;
   holderWallet: string;
   votingAddress: string;
   timestamp: string;
+  supersededAt: string;   // "" when active
+  supersededBy: string;   // "" when active
 }
 
 interface RawRow {
+  id: string;
   token_id: string;
   holder_wallet: string;
   ciphertext: string;
+  superseded_at: string;
+  superseded_by: string;
 }
 
 function parseCSV(csv: string): RawRow[] {
   const lines = csv.trim().split("\n");
   if (lines.length < 2) return [];
   const headers = lines[0]!.split(",");
+  const idIdx = headers.indexOf("id");
   const tokenIdx = headers.indexOf("token_id");
   const walletIdx = headers.indexOf("holder_wallet");
   const cipherIdx = headers.indexOf("ciphertext");
+  const supAtIdx = headers.indexOf("superseded_at");
+  const supByIdx = headers.indexOf("superseded_by");
   if (tokenIdx < 0 || walletIdx < 0 || cipherIdx < 0) return [];
 
   return lines.slice(1).map((line) => {
     const cols = parseCSVLine(line);
     return {
+      id: idIdx >= 0 ? (cols[idIdx] ?? "") : "",
       token_id: cols[tokenIdx] ?? "",
       holder_wallet: cols[walletIdx] ?? "",
       ciphertext: cols[cipherIdx] ?? "",
+      superseded_at: supAtIdx >= 0 ? (cols[supAtIdx] ?? "") : "",
+      superseded_by: supByIdx >= 0 ? (cols[supByIdx] ?? "") : "",
     };
   });
 }
@@ -55,8 +67,9 @@ function hexToBytes(hex: string): Uint8Array {
 }
 
 function downloadCSV(rows: DecryptedRow[]): void {
-  const header = "token_id,holder_wallet,voting_address,timestamp";
-  const body = rows.map((r) => `"${r.tokenId}","${r.holderWallet}","${r.votingAddress}","${r.timestamp}"`).join("\n");
+  const header = "id,token_id,holder_wallet,voting_address,timestamp,superseded_at,superseded_by";
+  const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
+  const body = rows.map((r) => [r.id, r.tokenId, r.holderWallet, r.votingAddress, r.timestamp, r.supersededAt, r.supersededBy].map(esc).join(",")).join("\n");
   const blob = new Blob([header + "\n" + body], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -113,20 +126,33 @@ export function AdminPage({ onBack }: { onBack: () => void }): JSX.Element {
             timestamp: string;
           };
           decrypted.push({
+            id: r.id,
             tokenId: r.token_id,
             holderWallet: r.holder_wallet,
             votingAddress: plain.votingAddress,
             timestamp: plain.timestamp,
+            supersededAt: r.superseded_at,
+            supersededBy: r.superseded_by,
           });
         } catch (err) {
           decrypted.push({
+            id: r.id,
             tokenId: r.token_id,
             holderWallet: r.holder_wallet,
             votingAddress: `[DECRYPT FAILED: ${(err as Error).message}]`,
             timestamp: "",
+            supersededAt: r.superseded_at,
+            supersededBy: r.superseded_by,
           });
         }
       }
+      // Sort: active rows first, then superseded (oldest-superseded last).
+      decrypted.sort((a, b) => {
+        const aSup = a.supersededAt ? 1 : 0;
+        const bSup = b.supersededAt ? 1 : 0;
+        if (aSup !== bSup) return aSup - bSup;
+        return a.tokenId.localeCompare(b.tokenId, undefined, { numeric: true });
+      });
       setRows(decrypted);
     } catch (err) {
       setError((err as Error).message);
@@ -224,18 +250,41 @@ export function AdminPage({ onBack }: { onBack: () => void }): JSX.Element {
                       <th className="pb-3 pr-4">Badge</th>
                       <th className="pb-3 pr-4">Holder</th>
                       <th className="pb-3 pr-4">Voting Address</th>
-                      <th className="pb-3">Time</th>
+                      <th className="pb-3 pr-4">Time</th>
+                      <th className="pb-3">Status</th>
                     </tr>
                   </thead>
                   <tbody className="font-mono text-xs">
-                    {rows.map((r) => (
-                      <tr key={r.tokenId} className="border-t border-white/5">
-                        <td className="py-2.5 pr-4 text-white">{r.tokenId}</td>
-                        <td className="py-2.5 pr-4 text-white/60">{r.holderWallet.slice(0, 8)}...{r.holderWallet.slice(-4)}</td>
-                        <td className="py-2.5 pr-4 text-brand-green-500">{r.votingAddress.slice(0, 10)}...{r.votingAddress.slice(-4)}</td>
-                        <td className="py-2.5 text-white/40">{r.timestamp.slice(0, 16)}</td>
-                      </tr>
-                    ))}
+                    {rows.map((r) => {
+                      const superseded = r.supersededAt !== "";
+                      return (
+                        <tr
+                          key={r.id || `${r.tokenId}-${r.timestamp}`}
+                          className={`border-t border-white/5 ${superseded ? "opacity-40" : ""}`}
+                        >
+                          <td className="py-2.5 pr-4 text-white">{r.tokenId}</td>
+                          <td className="py-2.5 pr-4 text-white/60">{r.holderWallet.slice(0, 8)}...{r.holderWallet.slice(-4)}</td>
+                          <td className={`py-2.5 pr-4 ${superseded ? "text-white/60 line-through" : "text-brand-green-500"}`}>
+                            {r.votingAddress.slice(0, 10)}...{r.votingAddress.slice(-4)}
+                          </td>
+                          <td className="py-2.5 pr-4 text-white/40">{r.timestamp.slice(0, 16)}</td>
+                          <td className="py-2.5">
+                            {superseded ? (
+                              <span
+                                className="inline-block rounded bg-brand-red-500/15 border border-brand-red-500/30 px-2 py-0.5 text-[10px] uppercase tracking-wider text-brand-red-500"
+                                title={`Replaced ${r.supersededAt.slice(0, 16)} by ${r.supersededBy.slice(0, 8)}…`}
+                              >
+                                Superseded
+                              </span>
+                            ) : (
+                              <span className="inline-block rounded bg-brand-green-500/15 border border-brand-green-500/30 px-2 py-0.5 text-[10px] uppercase tracking-wider text-brand-green-500">
+                                Active
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

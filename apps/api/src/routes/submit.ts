@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Hex } from "viem";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { SubmitRequestSchema, type VotingAddressSubmission } from "@ethsec/shared";
 import { verifyCiphertextHash, verifySignature, verifyTimestampWindow } from "../verify.js";
 import { decodeBundle } from "@ethsec/shared";
@@ -95,31 +96,67 @@ export async function submitRoute(app: FastifyInstance, deps: SubmitRouteDeps): 
       }
     }
 
-    // 5. Persist. UNIQUE(token_id) is the authoritative duplicate check.
+    // 5. Persist — with resubmission semantics.
+    //
+    // Holders may replace their voting address after an initial submission.
+    // The previous row is NOT deleted; it's marked `superseded_at = now()`
+    // with `superseded_by` pointing at the new row. Admin export surfaces
+    // the full history. At most one ACTIVE row per token_id is enforced by
+    // the partial unique index in the schema.
+    //
+    // Strategy: do both writes in a transaction so a replay of the old row
+    // being superseded can't orphan the system if the insert fails.
+    let resubmission = false;
     try {
-      await db.insert(submissions).values({
-        tokenId: p.tokenId,
-        holderWallet: p.holderWallet,
-        signature: p.signature,
-        signaturePayloadJson: {
-          badgeContract: submission.badgeContract,
-          tokenId: submission.tokenId.toString(),
-          holderWallet: submission.holderWallet,
-          ciphertextHash: submission.ciphertextHash,
-          nonce: submission.nonce,
-          issuedAt: submission.issuedAt.toString(),
-          expiresAt: submission.expiresAt.toString(),
-        },
-        ciphertext: p.ciphertext,
-        ciphertextHash: p.ciphertextHash,
-        nonce: p.nonce,
+      await db.transaction(async (tx) => {
+        const existing = await tx
+          .select({ id: submissions.id })
+          .from(submissions)
+          .where(and(eq(submissions.tokenId, p.tokenId), isNull(submissions.supersededAt)))
+          .limit(1);
+
+        const inserted = await tx
+          .insert(submissions)
+          .values({
+            tokenId: p.tokenId,
+            holderWallet: p.holderWallet,
+            signature: p.signature,
+            signaturePayloadJson: {
+              badgeContract: submission.badgeContract,
+              tokenId: submission.tokenId.toString(),
+              holderWallet: submission.holderWallet,
+              ciphertextHash: submission.ciphertextHash,
+              nonce: submission.nonce,
+              issuedAt: submission.issuedAt.toString(),
+              expiresAt: submission.expiresAt.toString(),
+            },
+            ciphertext: p.ciphertext,
+            ciphertextHash: p.ciphertextHash,
+            nonce: p.nonce,
+          })
+          .returning({ id: submissions.id });
+
+        const newId = inserted[0]?.id;
+        if (!newId) throw new Error("insert returned no id");
+
+        if (existing.length > 0) {
+          resubmission = true;
+          await tx
+            .update(submissions)
+            .set({ supersededAt: sql`now()`, supersededBy: newId })
+            .where(eq(submissions.id, existing[0]!.id));
+        }
       });
     } catch (e) {
-      if (isUniqueViolation(e)) return reply.code(409).send({ error: "already_submitted" });
+      // A unique_violation here means two concurrent inserts raced on the
+      // partial unique index. Treat as "re-send", don't surface 500.
+      if (isUniqueViolation(e)) {
+        return reply.code(409).send({ error: "concurrent_submission_retry" });
+      }
       req.log.error({ err: e }, "submit: insert failed");
       return reply.code(500).send({ error: "internal_error" });
     }
 
-    return { ok: true, submittedAt: new Date().toISOString() };
+    return { ok: true, submittedAt: new Date().toISOString(), resubmission };
   });
 }

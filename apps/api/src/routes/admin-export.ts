@@ -4,7 +4,7 @@ import type { DB } from "../db/client.js";
 import type { Env } from "../config.js";
 
 const CSV_HEADER =
-  "id,token_id,holder_wallet,signature,ciphertext,ciphertext_hash,nonce,submitted_at";
+  "id,token_id,holder_wallet,signature,ciphertext,ciphertext_hash,nonce,submitted_at,superseded_at,superseded_by";
 
 function csvField(s: unknown): string {
   const str = s == null ? "" : String(s);
@@ -51,6 +51,8 @@ export async function adminExportRoute(
         r.ciphertextHash,
         r.nonce,
         r.submittedAt instanceof Date ? r.submittedAt.toISOString() : String(r.submittedAt),
+        r.supersededAt instanceof Date ? r.supersededAt.toISOString() : (r.supersededAt ?? ""),
+        r.supersededBy ?? "",
       ]
         .map(csvField)
         .join(","),

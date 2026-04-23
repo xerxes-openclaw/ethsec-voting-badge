@@ -26,7 +26,12 @@ describe("makeTestDb (pg-mem + drizzle/node-postgres)", () => {
     }
   });
 
-  it("enforces UNIQUE(token_id)", async () => {
+  it("allows multiple rows per token_id (resubmission history is app-enforced)", async () => {
+    // Schema switched from `UNIQUE(token_id)` to a partial unique index
+    // `WHERE superseded_at IS NULL` — see db/schema.ts. pg-mem doesn't
+    // replicate partial unique indexes, so the test DB permits multiple
+    // rows per token_id; route logic is what ensures at most one active
+    // row. Route-level behaviour is covered in submit.test.ts.
     const { db, dispose } = await makeTestDb();
     try {
       const row = {
@@ -39,7 +44,9 @@ describe("makeTestDb (pg-mem + drizzle/node-postgres)", () => {
         nonce: "0x" + "d".repeat(64),
       };
       await db.insert(submissions).values(row);
-      await expect(db.insert(submissions).values(row)).rejects.toThrow(/duplicate key|unique/i);
+      await db.insert(submissions).values(row); // second insert allowed in test DB
+      const rows = await db.select().from(submissions).where(eq(submissions.tokenId, "42"));
+      expect(rows.length).toBe(2);
     } finally {
       await dispose();
     }

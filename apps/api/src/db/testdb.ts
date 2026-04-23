@@ -39,17 +39,23 @@ export async function makeTestDb(): Promise<{
   });
 
   // Create the submissions table — must mirror drizzle schema in `db/schema.ts`.
+  // The partial unique index on (token_id) WHERE superseded_at IS NULL
+  // isn't declared here because pg-mem's partial-index support is limited.
+  // Application logic guarantees at-most-one active row per token_id; the
+  // index is there for safety in real Postgres, not to support tests.
   mem.public.none(`
     CREATE TABLE submissions (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-      token_id text NOT NULL UNIQUE,
+      token_id text NOT NULL,
       holder_wallet text NOT NULL,
       signature text NOT NULL,
       signature_payload_json jsonb NOT NULL,
       ciphertext text NOT NULL,
       ciphertext_hash text NOT NULL,
       nonce text NOT NULL,
-      submitted_at timestamp with time zone DEFAULT now() NOT NULL
+      submitted_at timestamp with time zone DEFAULT now() NOT NULL,
+      superseded_at timestamp with time zone,
+      superseded_by uuid
     );
   `);
 

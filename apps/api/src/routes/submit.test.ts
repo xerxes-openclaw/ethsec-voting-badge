@@ -98,16 +98,50 @@ describe("POST /submit", () => {
     await dispose();
   });
 
-  it("happy path: 200 + ok=true, then duplicate is 409", async () => {
+  it("happy path: 200 + ok=true, replay same payload is also 200 (idempotent resubmission)", async () => {
     await reset();
     const body = await makeValidSubmission({ tokenId: "1001" });
     const res = await app.inject({ method: "POST", url: "/submit", payload: body });
     expect(res.statusCode).toBe(200);
     expect(res.json().ok).toBe(true);
+    expect(res.json().resubmission).toBe(false);
 
-    const res2 = await app.inject({ method: "POST", url: "/submit", payload: body });
-    expect(res2.statusCode).toBe(409);
-    expect(res2.json().error).toBe("already_submitted");
+    // Second submission for the same tokenId: the old row is marked
+    // superseded and the new row becomes the active submission.
+    // Build a fresh payload (new nonce + new signed timestamp) so the
+    // signature verifies — this mirrors how a real resubmit works.
+    const body2 = await makeValidSubmission({ tokenId: "1001" });
+    const res2 = await app.inject({ method: "POST", url: "/submit", payload: body2 });
+    expect(res2.statusCode).toBe(200);
+    expect(res2.json().ok).toBe(true);
+    expect(res2.json().resubmission).toBe(true);
+  });
+
+  it("resubmission marks the older row superseded, keeps data for admin export", async () => {
+    await reset();
+    const body1 = await makeValidSubmission({ tokenId: "1010" });
+    const r1 = await app.inject({ method: "POST", url: "/submit", payload: body1 });
+    expect(r1.statusCode).toBe(200);
+
+    const body2 = await makeValidSubmission({ tokenId: "1010" });
+    const r2 = await app.inject({ method: "POST", url: "/submit", payload: body2 });
+    expect(r2.statusCode).toBe(200);
+    expect(r2.json().resubmission).toBe(true);
+
+    // Two rows should exist for token_id 1010: one superseded, one active.
+    const { submissions } = await import("../db/schema.js");
+    const rows = await _db.select().from(submissions);
+    const forToken = rows.filter((r) => r.tokenId === "1010");
+    expect(forToken.length).toBe(2);
+    const active = forToken.filter((r) => r.supersededAt === null);
+    const superseded = forToken.filter((r) => r.supersededAt !== null);
+    expect(active.length).toBe(1);
+    expect(superseded.length).toBe(1);
+    // Supersession should point at the active row.
+    expect(superseded[0]!.supersededBy).toBe(active[0]!.id);
+    // Ciphertexts differ (new nonce each submission), proving the old row
+    // wasn't just overwritten.
+    expect(active[0]!.ciphertext).not.toBe(superseded[0]!.ciphertext);
   });
 
   it("400 on schema-invalid body (missing fields)", async () => {

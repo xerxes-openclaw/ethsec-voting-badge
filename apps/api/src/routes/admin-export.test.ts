@@ -56,7 +56,7 @@ describe("GET /admin/export", () => {
     expect(r.headers["content-type"]).toMatch(/text\/csv/);
     const lines = r.body.split("\n");
     expect(lines[0]).toBe(
-      "id,token_id,holder_wallet,signature,ciphertext,ciphertext_hash,nonce,submitted_at",
+      "id,token_id,holder_wallet,signature,ciphertext,ciphertext_hash,nonce,submitted_at,superseded_at,superseded_by",
     );
     expect(lines).toHaveLength(1); // just the header
   });
