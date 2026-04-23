@@ -59,7 +59,7 @@ export function TokenInput({ onSubmit, disabled }: Props): JSX.Element {
     // address" layer. Block the no-op case where someone pastes their
     // connected wallet into the voting-address field by mistake.
     if (address && votingAddress.toLowerCase() === address.toLowerCase()) {
-      setErr("Please enter a new private address for your voting badge");
+      setErr("Please enter a new private address for your voting badge.");
       return;
     }
     setErr(null);

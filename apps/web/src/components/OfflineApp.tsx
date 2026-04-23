@@ -110,7 +110,7 @@ export function OfflineApp({ onBack }: Props): JSX.Element {
     if (votingAddress.toLowerCase() === holderWallet.toLowerCase()) {
       setPrep({
         status: "error",
-        message: "Please enter a new private address for your voting badge",
+        message: "Please enter a new private address for your voting badge.",
       });
       return;
     }
