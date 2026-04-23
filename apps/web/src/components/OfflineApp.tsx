@@ -104,6 +104,16 @@ export function OfflineApp({ onBack }: Props): JSX.Element {
       setPrep({ status: "error", message: "Voting address must be a 0x EVM address." });
       return;
     }
+    // The voting address must differ from the badge-holder wallet —
+    // same rule as Online mode. Users occasionally paste the holder
+    // wallet in by mistake; catch it before encryption.
+    if (votingAddress.toLowerCase() === holderWallet.toLowerCase()) {
+      setPrep({
+        status: "error",
+        message: "Please enter a new private address for your voting badge.",
+      });
+      return;
+    }
 
     setPrep({ status: "preparing" });
     try {
