@@ -43,11 +43,14 @@ export async function adminExportRoute(
 
     // Explicit ORDER BY so the CSV is deterministic across runs — makes
     // diffs between exports readable and matches the AdminPage's
-    // "active-first then token_id" display sort.
+    // "active-first then token_id" display sort. `id` is the final
+    // tie-breaker because (token_id, submitted_at) isn't unique —
+    // resubmissions recorded in the same millisecond would otherwise
+    // have implementation-defined ordering.
     const rows = await db
       .select()
       .from(submissions)
-      .orderBy(asc(submissions.tokenId), asc(submissions.submittedAt));
+      .orderBy(asc(submissions.tokenId), asc(submissions.submittedAt), asc(submissions.id));
     const lines = rows.map((r) =>
       [
         r.id,
