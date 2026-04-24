@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify";
+import { asc } from "drizzle-orm";
 import { submissions } from "../db/schema.js";
 import type { DB } from "../db/client.js";
 import type { Env } from "../config.js";
 
 const CSV_HEADER =
-  "id,token_id,holder_wallet,signature,ciphertext,ciphertext_hash,nonce,submitted_at";
+  "id,token_id,holder_wallet,signature,ciphertext,ciphertext_hash,nonce,submitted_at,superseded_at,superseded_by";
 
 function csvField(s: unknown): string {
   const str = s == null ? "" : String(s);
@@ -40,7 +41,16 @@ export async function adminExportRoute(
       return reply.code(401).send({ error: "unauthorized" });
     }
 
-    const rows = await db.select().from(submissions);
+    // Explicit ORDER BY so the CSV is deterministic across runs — makes
+    // diffs between exports readable and matches the AdminPage's
+    // "active-first then token_id" display sort. `id` is the final
+    // tie-breaker because (token_id, submitted_at) isn't unique —
+    // resubmissions recorded in the same millisecond would otherwise
+    // have implementation-defined ordering.
+    const rows = await db
+      .select()
+      .from(submissions)
+      .orderBy(asc(submissions.tokenId), asc(submissions.submittedAt), asc(submissions.id));
     const lines = rows.map((r) =>
       [
         r.id,
@@ -51,6 +61,8 @@ export async function adminExportRoute(
         r.ciphertextHash,
         r.nonce,
         r.submittedAt instanceof Date ? r.submittedAt.toISOString() : String(r.submittedAt),
+        r.supersededAt instanceof Date ? r.supersededAt.toISOString() : (r.supersededAt ?? ""),
+        r.supersededBy ?? "",
       ]
         .map(csvField)
         .join(","),
