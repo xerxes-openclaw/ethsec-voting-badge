@@ -11,7 +11,7 @@ import {
   reduce,
   type SubmissionState,
 } from "../state/submission.js";
-import { getConfig, getTokenStatus, postSubmit } from "../api.js";
+import { getConfig, postSubmit } from "../api.js";
 
 /**
  * Orchestrator hook for the online flow. Entry points:
@@ -49,15 +49,12 @@ export function useSubmission(): {
         dispatch({ type: "WALLET_READY" });
 
         const config = await getConfig();
-        const status = await getTokenStatus(tokenId);
-        if (status.used) {
-          dispatch({
-            type: "ERROR",
-            code: "already_submitted",
-            message: `Badge ${tokenId} already submitted a voting address.`,
-          });
-          return;
-        }
+        // /token-status is intentionally NOT consulted here. Resubmission
+        // is a first-class flow on the server (PR #5): /submit marks the
+        // old row `superseded_at = now()` and inserts the replacement.
+        // A UX hint ("this replaces your current voting address") would
+        // be nice but requires a state-machine change and a UI surface —
+        // out of scope for this hotfix.
         dispatch({ type: "CONFIG_LOADED", config });
 
         dispatch({ type: "TOKEN_PICKED", tokenId, votingAddress });
