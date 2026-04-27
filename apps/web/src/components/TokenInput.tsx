@@ -54,11 +54,21 @@ export function TokenInput({ onSubmit, disabled }: Props): JSX.Element {
       setErr("Voting address must be a valid 0x-prefixed EVM address.");
       return;
     }
-    // The voting address is meant to be a DIFFERENT wallet from the one
-    // holding the badge — that's the whole point of the "private voting
-    // address" layer. Block the no-op case where someone pastes their
-    // connected wallet into the voting-address field by mistake.
-    if (address && votingAddress.toLowerCase() === address.toLowerCase()) {
+    // The voting address must be a DIFFERENT wallet from the one holding
+    // the badge — that's the whole point of the private-voting layer.
+    //
+    // Hard-guard on `address` rather than the previous `address && …`
+    // short-circuit: wagmi's `useAccount()` can briefly return
+    // `address: undefined` during reconnects / account switches even
+    // while the parent component sees `accountStatus === "connected"`
+    // (each `useAccount()` instance updates on its own render schedule).
+    // The old guard let those races through, allowing a same-address
+    // submission to slip past the check.
+    if (!address) {
+      setErr("Wallet disconnected. Reconnect and try again.");
+      return;
+    }
+    if (votingAddress.toLowerCase() === address.toLowerCase()) {
       setErr("Please enter a new private address for your voting badge.");
       return;
     }

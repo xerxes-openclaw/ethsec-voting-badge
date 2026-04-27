@@ -19,7 +19,11 @@
 	# reverse_proxy matcher gets a chance to fire. Result: API paths
 	# silently serve the SPA (front-end gets "Unexpected token '<'"
 	# trying to JSON.parse HTML, and POST /submit returns 405).
-	@api path /health* /config* /submit* /token-status* /admin*
+	#
+	# Path form is `/<prefix> /<prefix>/*` rather than `/<prefix>*` so
+	# `/admin*` doesn't accidentally match a future `/administrator` SPA
+	# route (same shape as `/configuration`, `/submitter`, etc.).
+	@api path /health /health/* /config /config/* /submit /submit/* /token-status /token-status/* /admin /admin/*
 	handle @api {
 		reverse_proxy api:3001 {
 			header_up Host {host}
@@ -28,9 +32,32 @@
 		}
 	}
 
+	# ----- Static assets (content-hashed, safe to cache forever) -----
+	# Vite emits filenames like /assets/index-DgJoGALt.js — every deploy
+	# changes the hash, so the URL itself is the cache-buster.
+	#
+	# This handle MUST come before the SPA-fallback handle, because
+	# `handle` blocks are matched in order and the fallback would
+	# otherwise swallow /assets/* requests too.
+	handle /assets/* {
+		root * /srv/web
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
 	# ----- Static web bundle (SPA fallback to index.html) -----
+	# Everything else: if the requested path matches a real file under
+	# /srv/web, serve it; otherwise rewrite to /index.html. The cache
+	# header lives inside the handle so it applies AFTER `try_files`
+	# rewrites the URL — Caddy v2 evaluates `header`'s matcher against
+	# the incoming path, so without this scoping a SPA deep-link like
+	# /badge/123 would get a no-match-anything matcher and the cache
+	# header would never fire. Inside this handle every response is
+	# either an HTML SPA shell or a non-asset static file, so a blanket
+	# `Cache-Control: no-cache, must-revalidate` is the right default.
 	handle {
 		root * /srv/web
+		header Cache-Control "no-cache, must-revalidate"
 		try_files {path} /index.html
 		file_server
 	}
