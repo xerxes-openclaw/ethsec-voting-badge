@@ -43,10 +43,20 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 		# HSTS kicks in once Caddy has a real TLS cert; harmless on :80.
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		# Baseline CSP — the app has no inline scripts and fetches only
-		# from its own origin + the Vite/wagmi RPC endpoint at runtime.
-		# Font loading from Google Fonts is required for Inter Tight.
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https: wss:; img-src 'self' data:; media-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+		# CSP tuned for browser-wallet + WalletConnect compatibility:
+		#   - script-src includes 'unsafe-inline' so Firefox MetaMask's
+		#     extension-injected `inpage.js` content script can attach the
+		#     EIP-1193 provider. Firefox enforces page CSP on extension
+		#     content scripts (since v76); without this the wallet never
+		#     becomes available to the dapp.
+		#   - frame-src explicitly allows verify.walletconnect.{org,com} so
+		#     the WalletConnect attestation iframe can mount during connect.
+		#     Without it, the dapp errors with a downstream `removeChild`
+		#     DOMException when WC's modal tries to clean up the iframe.
+		#   - img-src adds https: so wallet/network icons (loaded from
+		#     various CDNs by RainbowKit) don't silently 404.
+		# frame-ancestors 'none' is preserved for clickjacking protection.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https: wss:; img-src 'self' data: https:; media-src 'self'; frame-src 'self' https://verify.walletconnect.org https://verify.walletconnect.com; frame-ancestors 'none'; base-uri 'self'"
 		# Remove Caddy's default server header
 		-Server
 	}
