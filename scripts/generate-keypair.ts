@@ -4,7 +4,8 @@ import { bytesToHex } from "@noble/hashes/utils";
 import { writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-const outDir = resolve(process.cwd(), process.argv[2] ?? "./keys");
+const baseDir = process.env.INIT_CWD ?? process.cwd();
+const outDir = resolve(baseDir, process.argv[2] ?? "./keys");
 const pubPath  = resolve(outDir, "public.key");
 const privPath = resolve(outDir, "private.key");
 

@@ -218,37 +218,51 @@ export function OfflineApp({ onBack }: Props): JSX.Element {
     }
   }
 
-  // ── Accept an externally-produced signature (Path B). Verifies that it
-  // recovers to the holder wallet before producing the blob. ──
+  // ── Accept an externally-produced signature (Path B). For a 65-byte
+  // ECDSA signature we still recover-and-compare locally so an obvious
+  // typo gets caught before download. Smart-contract wallets (Safe and
+  // other ERC-1271) produce variable-length approval blobs that aren't
+  // ECDSA-recoverable; for those we accept the bytes and defer the real
+  // verification to the server, which calls `isValidSignature` on-chain
+  // at /submit time. ──
   async function applyExternalSignature(): Promise<void> {
     if (prep.status !== "ready") return;
     const sig = pastedSignature.trim() as Hex;
-    if (!/^0x[a-fA-F0-9]{130}$/.test(sig)) {
-      setPrep({ status: "error", message: "Signature must be a 0x-prefixed 65-byte hex string (132 chars)." });
+    if (!/^0x[a-fA-F0-9]+$/.test(sig) || sig.length % 2 !== 0 || sig.length < 4) {
+      setPrep({
+        status: "error",
+        message: "Signature must be 0x-prefixed even-length hex.",
+      });
       return;
     }
     try {
-      const recovered = await recoverTypedDataAddress({
-        domain: prep.typedData.domain,
-        types: prep.typedData.types,
-        primaryType: prep.typedData.primaryType,
-        message: {
-          badgeContract: prep.body.badgeContract,
-          tokenId: BigInt(prep.body.tokenId),
-          holderWallet: prep.body.holderWallet,
-          ciphertextHash: prep.body.ciphertextHash,
-          nonce: prep.body.nonce,
-          issuedAt: BigInt(prep.body.issuedAt),
-          expiresAt: BigInt(prep.body.expiresAt),
-        },
-        signature: sig,
-      });
-      if (recovered.toLowerCase() !== prep.body.holderWallet.toLowerCase()) {
-        setPrep({
-          status: "error",
-          message: `Signature recovers to ${recovered}, not the holder wallet ${prep.body.holderWallet}.`,
+      const isEcdsaShape = sig.length === 132;
+      if (isEcdsaShape) {
+        const recovered = await recoverTypedDataAddress({
+          domain: prep.typedData.domain,
+          types: prep.typedData.types,
+          primaryType: prep.typedData.primaryType,
+          message: {
+            badgeContract: prep.body.badgeContract,
+            tokenId: BigInt(prep.body.tokenId),
+            holderWallet: prep.body.holderWallet,
+            ciphertextHash: prep.body.ciphertextHash,
+            nonce: prep.body.nonce,
+            issuedAt: BigInt(prep.body.issuedAt),
+            expiresAt: BigInt(prep.body.expiresAt),
+          },
+          signature: sig,
         });
-        return;
+        if (recovered.toLowerCase() !== prep.body.holderWallet.toLowerCase()) {
+          setPrep({
+            status: "error",
+            message:
+              `Signature recovers to ${recovered}, not the holder wallet ${prep.body.holderWallet}. ` +
+              `If signing with a smart-contract wallet (e.g. Safe), use the Connect wallet path instead — ` +
+              `local ECDSA recovery cannot validate ERC-1271 signatures.`,
+          });
+          return;
+        }
       }
       const blob: SubmitBody = { ...prep.body, signature: sig };
       downloadJson(blob, `ethsec-submission-badge-${prep.body.tokenId}.json`);
@@ -328,7 +342,7 @@ pnpm --filter @ethsec/scripts sign-offline --in payload.json --out sig.txt
           </h1>
           <p className="text-gray-300 text-base sm:text-lg max-w-lg mx-auto leading-relaxed">
             Submit a private address to use for voting in TheDAO Security Fund rounds.
-            The connection between this address and your public address will be known only by Griff Green.
+            The connection between this address and your public address will be known only by the round administrator.
             The goal is to minimize the politics of voting, while still maintaining a simple manageable voting solution.
           </p>
         </header>

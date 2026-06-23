@@ -25,7 +25,7 @@ trade-off documented below.
 
 Out of scope: compromise of the admin's personal machine after key
 generation, compromise of the on-chain contract itself, social-engineering
-against Griff.
+against the admin.
 
 ---
 

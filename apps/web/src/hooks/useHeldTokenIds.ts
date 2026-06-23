@@ -72,15 +72,16 @@ export function useHeldTokenIds(wallet: Address | undefined): HeldTokenIdsState 
     (async () => {
       setState({ status: "loading" });
       try {
-        // 1) balanceOf short-circuit
-        const balance = (await client
-          .readContract({
-            address: APP_CONFIG.badgeContract,
-            abi: ERC721_ABI,
-            functionName: "balanceOf",
-            args: [wallet],
-          })
-          .catch(() => 0n)) as bigint;
+        // 1) balanceOf short-circuit. Do NOT swallow errors here: a
+        // rate-limited or unreachable RPC would otherwise look identical
+        // to "balance is 0" and the UI would (incorrectly) tell a real
+        // badgeholder they don't own a badge.
+        const balance = (await client.readContract({
+          address: APP_CONFIG.badgeContract,
+          abi: ERC721_ABI,
+          functionName: "balanceOf",
+          args: [wallet],
+        })) as bigint;
 
         if (cancelled) return;
         if (balance === 0n) {

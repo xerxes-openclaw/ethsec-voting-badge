@@ -11,3 +11,9 @@ coverage
 .DS_Store
 .pnpm-store
 scripts/.keys/
+scripts/keys/
+/keys/
+
+# Cyfrin
+.claude/
+.cygent/

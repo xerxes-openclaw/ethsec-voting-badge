@@ -1,11 +1,10 @@
 # ETHSecurity Voting Badge — Address Submission Tool
 
 **Design spec · 2026-04-14**
-**Authors:** Griff (product) · Zeptimus (product) · Xerxes (engineering)
 
 ## 1. Purpose
 
-A one-time-use web app that lets ETHSecurity Badge holders privately register a separate Ethereum voting address. Submissions are encrypted client-side and stored as ciphertext only; decryption happens exclusively on Griff's offline machine.
+A one-time-use web app that lets ETHSecurity Badge holders privately register a separate Ethereum voting address. Submissions are encrypted client-side and stored as ciphertext only; decryption happens exclusively on the admin's offline machine.
 
 The goal is unlinkability: a badge holder's on-chain voting and donation activity should not be trivially traceable back to their public badge-holding wallet.
 
@@ -119,7 +118,7 @@ expiresAt:      uint256     // issuedAt + 600 (10-minute window)
 
 ### 7.3 Key management
 
-- Keypair generated via `scripts/generate-keypair.ts` on Griff's offline machine.
+- Keypair generated via `scripts/generate-keypair.ts` on the admin's offline machine.
 - Output: `public.key` (embedded in FE config, safe to commit) and `private.key` (offline only, NEVER in repo).
 - Root `.gitignore` blocks `*.private.key` and `private.key`.
 - Library: `@noble/post-quantum` (audited, zero-dependency, works in browser and Node).
@@ -170,7 +169,7 @@ No plaintext columns. Never.
 
 1. `curl -H "Authorization: Bearer $TOKEN" https://api.host/admin/export > encrypted.csv`
 2. `pnpm tsx scripts/decrypt-export.ts --in encrypted.csv --key ./private.key --out decrypted.csv`
-3. Decrypted CSV columns: `token_id, holder_wallet, voting_address, submitted_at, notes, mapped_identity` (last two blank, manually filled by Griff).
+3. Decrypted CSV columns: `token_id, holder_wallet, voting_address, submitted_at, notes, mapped_identity` (last two blank, manually filled by the admin).
 4. Script runs entirely offline; never touches the backend.
 
 ## 9. Security posture
@@ -244,7 +243,7 @@ Aesthetic: dark navy gradient background, white text on dark, rounded red button
 
 ## 14. Open items for a human before deployment
 
-- Generate production ML-KEM-768 keypair on Griff's offline machine; place `public.key` hex into `VITE_ENCRYPTION_PUBLIC_KEY_HEX`.
+- Generate production ML-KEM-768 keypair on the admin's offline machine; place `public.key` hex into `VITE_ENCRYPTION_PUBLIC_KEY_HEX`.
 - Provision production Postgres (Railway/Fly/Neon) and set `DATABASE_URL`.
 - Provision mainnet RPC endpoint (Alchemy/Infura) and set `RPC_URL`.
 - Generate and set `ADMIN_EXPORT_TOKEN` (≥32 bytes random).

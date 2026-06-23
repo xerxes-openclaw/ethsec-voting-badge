@@ -3,9 +3,14 @@ import { execSync } from "node:child_process";
 import { writeFileSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ml_kem768 } from "@noble/post-quantum/ml-kem";
 import { bytesToHex } from "@noble/hashes/utils";
 import { encryptPayload } from "@ethsec/shared";
+
+// Run the CLI from this script package's directory regardless of where the
+// test runner is invoked from.
+const scriptsDir = fileURLToPath(new URL(".", import.meta.url));
 
 describe("decrypt-export script", () => {
   it("round-trips a 1-row CSV", () => {
@@ -40,7 +45,7 @@ describe("decrypt-export script", () => {
       const outPath = join(dir, "dec.csv");
       execSync(
         `pnpm tsx decrypt-export.ts --in "${inPath}" --key "${keyPath}" --out "${outPath}"`,
-        { cwd: "C:/Users/Xerxes/Xerxes-Claude/ethsec-voting-badge/scripts", stdio: "pipe" },
+        { cwd: scriptsDir, stdio: "pipe" },
       );
 
       const out = readFileSync(outPath, "utf8");
@@ -83,7 +88,7 @@ describe("decrypt-export script", () => {
 
       execSync(
         `pnpm tsx decrypt-export.ts --in "${inPath}" --key "${keyPath}" --out "${outPath}"`,
-        { cwd: "C:/Users/Xerxes/Xerxes-Claude/ethsec-voting-badge/scripts", stdio: "pipe" },
+        { cwd: scriptsDir, stdio: "pipe" },
       );
 
       const lines = readFileSync(outPath, "utf8").trimEnd().split("\n");

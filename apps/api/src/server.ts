@@ -17,6 +17,7 @@ import {
   makePublicClient,
   type OwnershipChecker,
 } from "./onchain.js";
+import type { SignatureVerifier } from "./verify.js";
 
 export interface BuildServerOptions {
   /** Override the DB (used by tests with pg-mem). Defaults to {@link makeDb}(env.DATABASE_URL). */
@@ -30,6 +31,14 @@ export interface BuildServerOptions {
    * `null` if `RPC_URL` is unset.
    */
   ownership?: OwnershipChecker | null;
+  /**
+   * Override the EIP-712 signature verifier. Pass `null` to verify with
+   * local ECDSA recovery only — useful for tests and for no-RPC dev. The
+   * default builds one from the same `env.RPC_URL`-backed public client
+   * the ownership checker uses, so smart-contract wallets (Safe and other
+   * ERC-1271 wallets) are accepted in production.
+   */
+  verifier?: SignatureVerifier | null;
 }
 
 /**
@@ -124,13 +133,29 @@ export async function buildServer(opts: BuildServerOptions = {}) {
   }
 
   let ownership: OwnershipChecker | null;
-  if (opts.ownership !== undefined) {
+  let verifier: SignatureVerifier | null;
+  if (opts.ownership !== undefined && opts.verifier !== undefined) {
     ownership = opts.ownership;
+    verifier = opts.verifier;
   } else if (env.RPC_URL) {
     const client = makePublicClient(env.CHAIN_ID, env.RPC_URL);
-    ownership = makeOwnershipChecker(client, env.BADGE_CONTRACT as `0x${string}`);
+    ownership =
+      opts.ownership !== undefined
+        ? opts.ownership
+        : makeOwnershipChecker(client, env.BADGE_CONTRACT as `0x${string}`);
+    // Wrap to drop viem's wide generic surface — we only need this one
+    // shape, and SignatureVerifier is the explicit contract. The cast is
+    // pinned to this single call site: viem's `VerifyTypedDataParameters`
+    // requires `message: Record<string, unknown>`, which our typed
+    // `VotingAddressSubmission` is structurally compatible with but does
+    // not declare an index signature for.
+    verifier =
+      opts.verifier !== undefined
+        ? opts.verifier
+        : { verifyTypedData: (args) => client.verifyTypedData(args as never) };
   } else {
-    ownership = null;
+    ownership = opts.ownership ?? null;
+    verifier = opts.verifier ?? null;
   }
 
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" } });
@@ -147,7 +172,7 @@ export async function buildServer(opts: BuildServerOptions = {}) {
   });
   await configRoute(app, env);
   await tokenStatusRoute(app, db);
-  await submitRoute(app, { db, env, ownership });
+  await submitRoute(app, { db, env, ownership, verifier });
   await adminExportRoute(app, db, env);
 
   return app;

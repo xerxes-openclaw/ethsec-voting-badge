@@ -93,6 +93,48 @@ describe("verifySignature", () => {
   });
 });
 
+describe("verifySignature with ERC-1271 verifier (smart-contract wallets)", () => {
+  const submission: VotingAddressSubmission = {
+    badgeContract: ("0x" + "a".repeat(40)) as `0x${string}`,
+    tokenId: 1n,
+    // Smart-contract wallets are the holderWallet — there is no private
+    // key behind this address, only an `isValidSignature` view function.
+    holderWallet: ("0x" + "f".repeat(40)) as `0x${string}`,
+    ciphertextHash: ("0x" + "0".repeat(64)) as `0x${string}`,
+    nonce: ("0x" + "0".repeat(64)) as `0x${string}`,
+    issuedAt: 1000n,
+    expiresAt: 2000n,
+  };
+  // Real Safe sigs are variable-length approval blobs, never the 65-byte
+  // ECDSA shape. Use a deliberately-not-65-byte payload to make sure the
+  // verifier is exercising the ERC-1271 path, not falling through to
+  // ECDSA recovery somewhere by accident.
+  const safeSig = ("0x" + "ab".repeat(200)) as `0x${string}`;
+
+  it("ok when verifier returns true", async () => {
+    const r = await verifySignature(1, submission, safeSig, {
+      verifyTypedData: async () => true,
+    });
+    expect(r.kind).toBe("ok");
+  });
+
+  it("rejects when verifier returns false", async () => {
+    const r = await verifySignature(1, submission, safeSig, {
+      verifyTypedData: async () => false,
+    });
+    expect(r.kind).toBe("signature_invalid");
+  });
+
+  it("rejects (does not throw) when verifier throws — RPC failure / wallet not deployed", async () => {
+    const r = await verifySignature(1, submission, safeSig, {
+      verifyTypedData: async () => {
+        throw new Error("eth_call reverted");
+      },
+    });
+    expect(r.kind).toBe("signature_invalid");
+  });
+});
+
 describe("verifyTimestampWindow", () => {
   it("ok when expiresAt > now and issuedAt is recent", () => {
     expect(verifyTimestampWindow(900n, 2000n, 1000n).kind).toBe("ok");

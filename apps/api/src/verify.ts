@@ -21,6 +21,24 @@ export type VerifyResult = VerifyOk | VerifyFailure;
 export const OK: VerifyOk = { kind: "ok" };
 
 /**
+ * Narrow shape around viem's `publicClient.verifyTypedData`. Implementations
+ * are expected to try ECDSA recovery first and then fall back to ERC-1271
+ * (and ERC-6492 for counterfactual smart accounts) — viem's public-client
+ * action does this transparently, so passing a viem `PublicClient` (wrapped
+ * to drop the unused generic parameters) is the production case.
+ */
+export interface SignatureVerifier {
+  verifyTypedData(args: {
+    address: Address;
+    domain: ReturnType<typeof buildDomain>;
+    types: typeof VOTING_SUBMISSION_TYPES;
+    primaryType: "VotingAddressSubmission";
+    message: VotingAddressSubmission;
+    signature: Hex;
+  }): Promise<boolean>;
+}
+
+/**
  * Recompute sha256(ciphertext) and check it equals the value the client
  * signed over. Defends against ciphertext substitution post-signing.
  */
@@ -32,13 +50,39 @@ export function verifyCiphertextHash(ciphertext: string, claimed: Hex): VerifyRe
 }
 
 /**
- * Recover the EIP-712 signer and confirm it matches the claimed `holderWallet`.
+ * Confirm the EIP-712 signature was produced by `submission.holderWallet`.
+ *
+ * When `verifier` is provided (production path), delegates to viem's
+ * `verifyTypedData`, which handles both ECDSA wallets and ERC-1271 smart
+ * contract wallets (Safe and similar multisigs) via an `isValidSignature`
+ * RPC call. ERC-6492 wrapped signatures from counterfactual accounts also
+ * verify through this path.
+ *
+ * When `verifier` is null/undefined (tests, no-RPC environments), falls
+ * back to local ECDSA recovery only — smart-contract wallets cannot be
+ * verified without an RPC, so they will be rejected as `signature_invalid`.
  */
 export async function verifySignature(
   chainId: number,
   submission: VotingAddressSubmission,
   signature: Hex,
+  verifier?: SignatureVerifier | null,
 ): Promise<VerifyResult> {
+  if (verifier) {
+    try {
+      const ok = await verifier.verifyTypedData({
+        address: submission.holderWallet,
+        domain: buildDomain(chainId),
+        types: VOTING_SUBMISSION_TYPES,
+        primaryType: "VotingAddressSubmission",
+        message: submission,
+        signature,
+      });
+      return ok ? OK : { kind: "signature_invalid" };
+    } catch {
+      return { kind: "signature_invalid" };
+    }
+  }
   let recovered: Address;
   try {
     recovered = (await recoverTypedDataAddress({

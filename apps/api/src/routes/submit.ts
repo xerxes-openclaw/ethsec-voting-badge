@@ -3,7 +3,12 @@ import type { Hex } from "viem";
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { SubmitRequestSchema, type VotingAddressSubmission } from "@ethsec/shared";
-import { verifyCiphertextHash, verifySignature, verifyTimestampWindow } from "../verify.js";
+import {
+  verifyCiphertextHash,
+  verifySignature,
+  verifyTimestampWindow,
+  type SignatureVerifier,
+} from "../verify.js";
 import { decodeBundle } from "@ethsec/shared";
 import { submissions } from "../db/schema.js";
 import type { DB } from "../db/client.js";
@@ -26,10 +31,16 @@ export interface SubmitRouteDeps {
    * skips the check; Task 3.6 wires in viem-backed verification.
    */
   ownership?: OwnershipChecker | null;
+  /**
+   * Optional EIP-712 signature verifier. When present, smart-contract
+   * wallets (Safe and other ERC-1271 wallets) are accepted; when null,
+   * only ECDSA signatures recover-and-match against `holderWallet`.
+   */
+  verifier?: SignatureVerifier | null;
 }
 
 export async function submitRoute(app: FastifyInstance, deps: SubmitRouteDeps): Promise<void> {
-  const { db, env, ownership } = deps;
+  const { db, env, ownership, verifier } = deps;
 
   app.post("/submit", async (req, reply) => {
     const parsed = SubmitRequestSchema.safeParse(req.body);
@@ -78,8 +89,10 @@ export async function submitRoute(app: FastifyInstance, deps: SubmitRouteDeps): 
       return reply.code(400).send({ error: tsCheck.kind });
     }
 
-    // 3. EIP-712 signature.
-    const sigCheck = await verifySignature(env.CHAIN_ID, submission, p.signature as Hex);
+    // 3. EIP-712 signature. With a `verifier` (production), smart-contract
+    //    wallets are checked via ERC-1271 in addition to ECDSA recovery;
+    //    without one (tests, no-RPC envs), only ECDSA wallets pass.
+    const sigCheck = await verifySignature(env.CHAIN_ID, submission, p.signature as Hex, verifier);
     if (sigCheck.kind !== "ok") {
       return reply.code(400).send({ error: sigCheck.kind });
     }
